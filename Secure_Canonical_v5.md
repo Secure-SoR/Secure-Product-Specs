@@ -481,7 +481,53 @@ It ensures:
 * Actionable AI recommendations
 
 ---
+## Systems, Bills, and Facility Management Confirmations as SoR Inputs
 
+Secure treats **building systems**, **utility bills**, and **facility management confirmations** as first-class inputs to the System of Record (SoR). They are not report content; they are **source datasets + evidence** that feed reporting and AI decisions.
+
+### A) Systems as SoR Entities
+
+Building systems (e.g., HVAC, lighting, BMS, meters, water, waste interfaces) are represented as structured SoR entities with explicit responsibility and attribution metadata:
+
+- **controlledBy:** tenant | landlord | shared  
+- **maintainedBy:** landlord/FM/third-party name  
+- **meteringStatus:** none | partial | full  
+- **allocationMethod:** measured | area | estimated  
+- **allocationNotes:** free-text rationale and boundary assumptions  
+- **servesSpaces:** list of space IDs (tenant/base building)  
+
+This enables defensible landlord–tenant boundary statements and prevents misattribution.
+
+### B) Bills as Evidence-Backed Source Records
+
+Utility bills are stored as **Data Library records** with attached evidence (PDF/CSV) and mapped to the billing-source model:
+
+- **Tenant Direct (Measured)** — supplier invoices and sub-meter data (e.g., Trio)  
+- **Landlord Recharge (Allocated)** — service charge / recharge invoices for base-building utilities  
+- **Third-Party (Measured/Allocated)** — e.g., waste contractor statements  
+
+Bills must always carry:
+
+- **sourceType:** upload | connector | manual  
+- **confidence:** measured | allocated | estimated  
+- **reportingPeriod:** start/end  
+- **evidenceAttachments:** file references stored at record level (not in reports)
+
+### C) Facility Management Confirmations (FM) as Structured Evidence
+
+FM confirmations (e.g., confirmation of metering coverage, allocation method, what utilities are included in service charge) are captured as structured records and linked evidence, used to justify attribution decisions.
+
+FM confirmations should be linked to:
+
+- relevant **systems** (meteringStatus / allocationMethod)  
+- relevant **Data Library records** (Landlord Recharge allocations)  
+- report **data scope & limitations** and **boundary statements**
+
+### D) Report and Agent Consumption Rules
+
+- **Reports** consume structured Data Library records and evidence links only; reports do not store bills or FM confirmations.  
+- **AI Agents** (Boundary, Data Readiness, Reporting Copilot) must cite bills and FM confirmations via Data Library references and reflect their confidence levels.
+---
 # 15. Non-Negotiable Architecture Rules
 
 * No hardcoded report governance
