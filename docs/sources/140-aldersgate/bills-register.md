@@ -5,6 +5,8 @@ This document maps real-world billing inputs and FM confirmations to Secure’s 
 Raw invoices are not stored in this repository.
 Only structured metadata and mapping logic are documented.
 
+**Building systems & nodes:** See [Building Systems Register + Nodes](building-systems-register.md) for the authoritative 140 Aldersgate systems register and end-use nodes.
+
 ---
 
 ## 1. Tenant Electricity (Direct – Measured)

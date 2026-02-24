@@ -162,21 +162,17 @@ Space {
 
 ## 4.5 Systems Taxonomy
 
-Categories:
+**Full taxonomy:** see [Building Systems Taxonomy (v1.0)](docs/data-model/building-systems-taxonomy.md). Aligned with Lovable.ai and Agent rules.
 
-* HVAC
-* Lighting
-* Plug Loads
-* Lifts
-* Water
-* Waste
-* Power
-* BMS
+**systemCategory (enum):** Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring. Placeholders: LifeSafety, Security, ICT, Envelope, PlumbingDrainage, Amenities.
+
+Each building system has exactly one `systemCategory` and one `systemType` (e.g. HVAC → Boilers, Chillers, AHU; Lighting → TenantLighting, DALI). End-use nodes link via `linkedSystemId` and use `utilityType` / `nodeCategory` from the same taxonomy.
 
 ```ts
 System {
   id
-  category
+  systemCategory   // enum per taxonomy
+  systemType       // enum per taxonomy
   controlledBy: "tenant" | "landlord" | "shared"
   maintainedBy: string
   servesSpaces: string[]
