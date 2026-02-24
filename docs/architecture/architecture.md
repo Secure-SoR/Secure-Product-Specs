@@ -412,12 +412,17 @@ These rules must remain stable across migrations:
 
 # 8. Next Implementation Priority (Ordered)
 
-1. Implement real authentication
-2. Implement real document storage
-3. Make Meter a first-class entity
-4. Persist agent_runs and agent_findings
-5. Add audit_events
-6. Remove localStorage as SoR
+**Step-by-step plan (Lovable + Supabase + agent):** See [Implementation plan: Lovable, Supabase, Agent](../implementation-plan-lovable-supabase-agent.md) for phased steps to wire account/membership, properties, spaces, systems, data library + uploads, and agent context.
+
+**Current state (Lovable):** The Lovable app now uses **Supabase Auth** for sign-up and sign-in (`useAuth` hook, `signUp`/`signInWithPassword`/`signOut`, `ProtectedRoute`, session from Supabase). User and profile are created via Supabase Auth + `handle_new_user` trigger. **Account and membership creation** still use localStorage; the next step is to write these to Supabase so the app can read/write account-scoped data (properties, systems, etc.) with RLS.
+
+1. ~~Implement real authentication~~ — **Done (Supabase Auth in Lovable).**
+2. **Wire account + membership creation to Supabase** — After sign-up or onboarding, insert into `accounts` and `account_memberships` so the user can access account-scoped tables. (Requires RLS policy allowing authenticated users to INSERT into `accounts`; then INSERT into `account_memberships` with `user_id = auth.uid()`.)
+3. Implement real document storage
+4. Make Meter a first-class entity
+5. Persist agent_runs and agent_findings
+6. Add audit_events
+7. Remove localStorage as SoR (accounts, memberships, properties, etc.)
 
 ---
 

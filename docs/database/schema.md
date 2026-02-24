@@ -25,6 +25,12 @@ To **reset** and re-run: drop tables in reverse dependency order (or drop schema
 
 ---
 
+### 1.1 Post sign-up flow (Lovable integration)
+
+Supabase Auth creates the user; the `handle_new_user` trigger creates a row in `profiles`. For the user to see and create account-scoped data (properties, spaces, systems, etc.), the **app must** create a row in `accounts` and one in `account_memberships`. Because RLS requires membership to read accounts (chicken-and-egg for the first account), the **Lovable app does this via a Supabase Edge Function** `create-account` that uses the **service role** client to bypass RLS and insert into both tables. The Edge Function validates the user's JWT, checks name uniqueness via `check_account_name_exists`, then inserts and returns the account. **RLS policy:** There are **no permissive INSERT policies** for `accounts` or `account_memberships` for authenticated clients — creation is exclusively via the Edge Function, which hardens security. All policies are PERMISSIVE (not RESTRICTIVE) so that SELECT/UPDATE/DELETE work as intended. Security-definer functions (`check_account_name_exists`, `handle_new_user`) use `SET search_path = public` to avoid search-path hijacking. Until both rows exist, RLS will block access to `properties`, `systems`, `data_library_records`, etc.
+
+---
+
 ## 2. Table Overview
 
 | Table                  | Purpose                                      | Account-scoped |
@@ -76,6 +82,8 @@ Top-level tenant (organisation). No `account_id` on this table.
 | created_at         | timestamptz | NO    | |
 | updated_at         | timestamptz | NO    | |
 
+**RLS:** SELECT for members; UPDATE for admins. **No client INSERT** — creation is only via the `create-account` Edge Function (service role).
+
 ---
 
 ### 3.3 account_memberships
@@ -92,6 +100,10 @@ User membership in an account (role).
 | updated_at | timestamptz | NO    | |
 
 Unique on `(account_id, user_id)`.
+
+**RLS:** SELECT for own memberships; UPDATE/DELETE for admins in their account. **No client INSERT** — rows are created only by the `create-account` Edge Function (service role).
+
+**RPC (Lovable):** `check_account_name_exists(account_name text)` — returns true if an account with that name exists (case-insensitive). Used during onboarding to warn if the org is already registered. Implemented in [supabase-schema.sql](./supabase-schema.sql) as `SECURITY DEFINER` with `SET search_path = public`.
 
 ---
 

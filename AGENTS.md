@@ -8,7 +8,8 @@ This repository is the **backend** for the Secure app — the app you **build fr
 
 2. **Use the docs:**  
    - `docs/data-model/` — account, data-library, systems  
-   - `docs/architecture/` — system overview, boundary logic, data confidence  
+   - `docs/architecture/` — system overview, boundary logic, data confidence, migration (Supabase → Azure)  
+   - `docs/database/` — Supabase schema (tables, columns, RLS) and runnable SQL  
    - `docs/modules/` — reports and other modules  
 
 3. **Lovable:** The frontend is built in Lovable and calls this backend. You are building the backend that the UI needs. The Boundary / Data Readiness agent lives elsewhere (e.g. in an "AI Agents" project) and is connected to the Lovable app separately.
