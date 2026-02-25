@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS public.end_use_nodes (
   allocation_weight numeric CHECK (allocation_weight IS NULL OR (allocation_weight >= 0 AND allocation_weight <= 1)),
   applies_to_space_ids uuid[],
   notes text,
+  auto_generated boolean DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(property_id, node_id)
@@ -475,3 +476,6 @@ $$;
 -- CREATE TRIGGER normalize_systems_controlled_by_trigger
 --   BEFORE INSERT OR UPDATE OF controlled_by ON public.systems
 --   FOR EACH ROW EXECUTE FUNCTION public.normalize_systems_controlled_by();
+
+-- Optional: add auto_generated to end_use_nodes (for portfolio default nodes):
+-- ALTER TABLE public.end_use_nodes ADD COLUMN IF NOT EXISTS auto_generated boolean DEFAULT false;

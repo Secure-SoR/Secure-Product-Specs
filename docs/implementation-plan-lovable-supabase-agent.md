@@ -543,13 +543,17 @@ On the Physical and Technical (building systems) page, add an "Upload register" 
 
 **Why:** The Data Readiness / Boundary agent uses nodes (e.g. E_TENANT_PLUG, W_TOILETS) linked to systems for controllability. If you have these in Supabase, you can include them in the agent context.
 
+**Single source of truth:** [end-use-nodes-spec.md](../data-model/end-use-nodes-spec.md) — merges 140 Aldersgate End-Use Nodes v1 with our schema, space placeholders, control resolution rule, validation/weight rules, and JSON for agent context.
+
 ### Supabase
 
-- Table `end_use_nodes` exists. Columns: `property_id`, `system_id`, `node_id` (e.g. E_TENANT_PLUG), `node_category`, `utility_type`, `control_override`, `allocation_weight`, `applies_to_space_ids`.
+- Table `end_use_nodes` exists. Columns: `property_id`, `system_id`, `node_id` (e.g. E_TENANT_PLUG), `node_category`, `utility_type`, `control_override`, `allocation_weight`, `applies_to_space_ids`, `notes`, `auto_generated` (optional). Unique on `(property_id, node_id)`. For existing DBs: `ALTER TABLE public.end_use_nodes ADD COLUMN IF NOT EXISTS auto_generated boolean DEFAULT false;` if you need the autogeneration flag.
 
 ### Lovable
 
-- **Create/list nodes:** Same as systems: insert and select by `property_id`. Link to `system_id` (UUID from `systems`) and optionally `applies_to_space_ids` (array of space UUIDs). Use node IDs and categories from [building-systems-taxonomy.md](../data-model/building-systems-taxonomy.md) or the [140 Aldersgate register](sources/140-aldersgate/building-systems-register.md).
+- **Create/list nodes:** Same as systems: insert and select by `property_id`. Link to `system_id` (UUID from `systems`) and `applies_to_space_ids` (array of space UUIDs; replace placeholders like SPACE_TENANT_DEMISE with real space IDs). Use node IDs and categories from [building-systems-taxonomy.md](../data-model/building-systems-taxonomy.md) or the [140 Aldersgate register §B](sources/140-aldersgate/building-systems-register.md). **Control resolution:** node.control_override ?? system.controlled_by (mapped to TENANT/LANDLORD/SHARED) ?? dominantSpace.control (tenant_controlled→TENANT, etc.). **Validation:** each node has exactly one system_id; ≥1 applies_to_space_ids; same property as system; allocation_weight 0..1; per-utility weights sum to ~1.0 when present. See [end-use-nodes-spec.md](../data-model/end-use-nodes-spec.md).
+- **Lovable prompts for nodes:** Full copy-paste prompts for list/create/edit/delete nodes and optional "Seed default nodes" are in [docs/lovable-prompts/nodes-implementation.md](lovable-prompts/nodes-implementation.md). Paste Prompt 1 into Lovable to implement the nodes UI; optionally Prompt 2 for seeding from the 140A register.
+- **Yes — update the Lovable UI to add nodes.** The app needs flows to list nodes by property (and optionally by system), create a node (system, node_id, node_category, utility_type, applies_to_space_ids, control_override, allocation_weight, notes), and edit/delete. Optionally: “Add default nodes” seeded from the 140A register (§B), resolving system by name and placeholders by spaces. **Multiple nodes per system is normal** (e.g. plug loads and process loads on the same system). When **bills are invoices only** (no end-use breakdown), use node **allocation_weights** to split the system/meter total into end-uses for reporting — see [nodes-attribution-and-control.md](../data-model/nodes-attribution-and-control.md) §4.
 - You can start without nodes and still run the agent with a minimal context (property, spaces, systems, data library records); add nodes when you’re ready for full controllability output.
 
 ---

@@ -225,10 +225,11 @@ End-use node linked to a system. Taxonomy: nodeCategory, utilityType in [buildin
 | allocation_weight    | numeric   | YES      | 0..1 |
 | applies_to_space_ids  | uuid[]    | YES      | |
 | notes                | text      | YES      | |
+| auto_generated       | boolean   | YES      | true if node was created by archetype/default generator (portfolio scalable) |
 | created_at           | timestamptz | NO    | |
 | updated_at           | timestamptz | NO    | |
 
-Unique on `(property_id, node_id)`.
+Unique on `(property_id, node_id)`. Full spec (v1 + engineer rules): [end-use-nodes-spec.md](../data-model/end-use-nodes-spec.md).
 
 ---
 

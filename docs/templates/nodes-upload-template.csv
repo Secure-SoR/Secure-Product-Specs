@@ -1,0 +1,4 @@
+node_id,node_category,utility_type,linked_system_name,space_placeholder,control_override,allocation_weight,notes
+E_TENANT_PLUG,tenant_plug_load,electricity,Tenant Electricity Submeters (6 total),SPACE_TENANT_DEMISE,TENANT,0.45,Tenant plug loads captured in floor submeters
+E_TENANT_LIGHT,tenant_lighting,electricity,Tenant Electricity Submeters (6 total),SPACE_TENANT_DEMISE,TENANT,0.15,Tenant demise lighting on submeters
+H_TENANT_ZONE,tenant_zone_conditioning,heating,Local HVAC Controls,SPACE_TENANT_DEMISE,SHARED,0.70,Tenant can adjust local zones; landlord controls plant

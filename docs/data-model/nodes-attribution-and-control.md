@@ -48,9 +48,24 @@ So: **spaces are linked to systems via `serves_space_ids`; control is inherited 
 
 ---
 
-## 4. References
+## 4. Multiple nodes per system — and bills as invoices only
+
+**Multiple nodes per system is normal.** One system (e.g. “Tenant Electricity Submeters” or “IT & Small Power”) can have several nodes: e.g. plug loads, process loads, lighting — each with its own `node_id`, `node_category`, and `allocation_weight`. Each node links to the **same** `system_id`. The weights for nodes under that system should sum to ~1.0 for the utility/scope they share (e.g. tenant electricity end-uses).
+
+**When utility bills are invoices only** (no breakdown by end-use — just total kWh or £ per meter/supply), you **infer** where consumption goes using the nodes:
+
+1. **Bill / meter** gives a total (e.g. “Tenant electricity 1,000 kWh” for a system or meter).
+2. **Nodes** linked to that system have `allocation_weight` (e.g. plugs 0.45, lighting 0.15, HVAC 0.30, …).
+3. **Split the total** by weight: e.g. 450 kWh to tenant_plug_load, 150 kWh to tenant_lighting, 300 kWh to hvac_serving_tenant. That gives you an **inferred end-use breakdown** for reporting, Scope 2, or the agent.
+
+So: **nodes are exactly what you use to go from “one number on the invoice” to “consumption by end-use”** when the bill doesn’t provide that split. The register’s notes (and allocation_weight) document the basis for the inference.
+
+---
+
+## 5. References
 
 - Node model and enums: [building-systems-taxonomy.md §2](building-systems-taxonomy.md)
 - Register example (systems + nodes): [building-systems-register.md](../sources/140-aldersgate/building-systems-register.md)
 - Schema: [schema.md](../database/schema.md) (§3.6 systems, §3.8 end_use_nodes)
 - Implementation plan (systems, nodes, context): [implementation-plan-lovable-supabase-agent.md](../implementation-plan-lovable-supabase-agent.md)
+- End-use nodes spec (v1 + engineer rules): [end-use-nodes-spec.md](end-use-nodes-spec.md)
