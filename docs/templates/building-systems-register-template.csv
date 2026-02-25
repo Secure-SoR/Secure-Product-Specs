@@ -1,0 +1,4 @@
+System Name,systemCategory,systemType,Controlled By,Maintained By,Serves Spaces,Metering Status,Allocation Method,Key Specs,Spec Status
+Main Incoming Electricity Supply,Power,GridLVSupply,Landlord,Landlord,Whole Property,Fiscal meter,Fiscal only,Supply No. 1200051331498,REAL
+Tenant Electricity Submeters (6 total),Power,ElectricitySubmeters,Tenant,Landlord (meter infra),Ground 4th 5th,Submetered,Direct measured,Meter IDs confirmed (6),REAL
+Base Building HVAC Plant,HVAC,CentralPlant_Unknown,Landlord,Landlord,Whole Building,Not tenant-metered,Embedded in service charge,Plant specs unknown,REAL

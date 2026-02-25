@@ -92,9 +92,12 @@ CREATE TABLE IF NOT EXISTS public.systems (
   controlled_by text NOT NULL CHECK (controlled_by IN ('tenant', 'landlord', 'shared')),
   maintained_by text,
   metering_status text NOT NULL CHECK (metering_status IN ('none', 'partial', 'full')),
-  allocation_method text NOT NULL CHECK (allocation_method IN ('measured', 'area', 'estimated')),
+  allocation_method text NOT NULL CHECK (allocation_method IN ('measured', 'area', 'estimated', 'mixed')),
   allocation_notes text,
+  key_specs text,
+  spec_status text,
   serves_space_ids uuid[],
+  serves_spaces_description text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -437,3 +440,38 @@ AS $$
     SELECT 1 FROM public.accounts WHERE lower(name) = lower(account_name)
   );
 $$;
+
+-- ============================================================================
+-- MIGRATIONS (run only if you already have the table with the old constraint)
+-- ============================================================================
+-- Allow allocation_method 'mixed' (part measured, part allocated) on systems:
+-- ALTER TABLE public.systems DROP CONSTRAINT IF EXISTS systems_allocation_method_check;
+-- ALTER TABLE public.systems ADD CONSTRAINT systems_allocation_method_check
+--   CHECK (allocation_method IN ('measured', 'area', 'estimated', 'mixed'));
+
+-- Fix "systems_controlled_by_check" when app sends tenant_controlled / landlord_controlled:
+-- 1) Allow those values in the CHECK.
+-- 2) Normalize to tenant | landlord | shared on insert/update so stored data stays consistent.
+-- Run the following in Supabase SQL Editor:
+
+-- DROP CONSTRAINT (name may be systems_controlled_by_check):
+-- ALTER TABLE public.systems DROP CONSTRAINT IF EXISTS systems_controlled_by_check;
+-- ALTER TABLE public.systems ADD CONSTRAINT systems_controlled_by_check
+--   CHECK (controlled_by IN ('tenant', 'landlord', 'shared', 'tenant_controlled', 'landlord_controlled'));
+
+-- Trigger to normalize controlled_by before insert/update:
+-- CREATE OR REPLACE FUNCTION public.normalize_systems_controlled_by()
+-- RETURNS TRIGGER LANGUAGE plpgsql AS $$
+-- BEGIN
+--   NEW.controlled_by := CASE NEW.controlled_by
+--     WHEN 'tenant_controlled' THEN 'tenant'
+--     WHEN 'landlord_controlled' THEN 'landlord'
+--     ELSE NEW.controlled_by
+--   END;
+--   RETURN NEW;
+-- END;
+-- $$;
+-- DROP TRIGGER IF EXISTS normalize_systems_controlled_by_trigger ON public.systems;
+-- CREATE TRIGGER normalize_systems_controlled_by_trigger
+--   BEFORE INSERT OR UPDATE OF controlled_by ON public.systems
+--   FOR EACH ROW EXECUTE FUNCTION public.normalize_systems_controlled_by();

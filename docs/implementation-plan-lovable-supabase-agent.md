@@ -4,6 +4,19 @@ Goal: Create properties, add spaces/systems and data library (bills, governance)
 
 ---
 
+## Next priorities (when you return)
+
+**Order of work:**
+
+1. **Create the Nodes part** — End-use nodes linked to systems (table `end_use_nodes`). Schema and taxonomy in [building-systems-taxonomy.md §2](../data-model/building-systems-taxonomy.md) and [building-systems-register.md §B](../sources/140-aldersgate/building-systems-register.md). Implementation plan: Phase 4 “End-use nodes” and “After systems: Nodes”.
+2. **Data Library** — Data library records + file uploads (bills, governance), Storage, documents, evidence. Implementation plan: Phase 3.
+3. **Scope 1, 2, 3 calculation** — Ensure Scope 1, 2, 3 are calculated correctly (data model, reporting, boundaries). Align with canonical and docs (e.g. data-library, allocation, metering).
+4. **Then move on to agent** — Build agent context from Supabase, call the agent, persist runs/findings. Implementation plan: Phase 5; for-agent: [README.md](../for-agent/README.md), [AGENT-TASKS.md](../for-agent/AGENT-TASKS.md).
+
+*Note added: systems + upload register are working; DB triggers normalize controlled_by, allocation_method, metering_status for imports.*
+
+---
+
 ## Overview
 
 | Phase | What | Where |
@@ -84,11 +97,18 @@ Goal: Create properties, add spaces/systems and data library (bills, governance)
 | spaces.space_class | `tenant` \| `base_building` |
 | spaces.control    | `tenant_controlled` \| `landlord_controlled` \| `shared` |
 | spaces.space_type  | e.g. common_area, shared_space, meeting_room, office (for base building and subspaces) |
-| systems.system_category | Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring |
-| systems.system_type | e.g. GridLVSupply, Boilers, TenantLighting |
+| *(app-only)* | For "My Tenant Spaces" filter: when mapping Supabase→BuildingSpace, set tenantAccountId (and tenant) from currentUser for rows where space_class === 'tenant'; DB does not store these on spaces. |
+| systems.system_category | Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring (from [building-systems-taxonomy.md](../data-model/building-systems-taxonomy.md)) |
+| systems.system_type | Per category: e.g. GridLVSupply, ElectricitySubmeters, GasSupply (Power); CentralPlant_Unknown, ZoneControls (HVAC); TenantLighting, OccupancySensors (Lighting); see taxonomy |
 | systems.controlled_by | tenant, landlord, shared |
+| systems.maintained_by | Free text (e.g. "Landlord", "Tenant (local) / Landlord (plant)") |
 | systems.metering_status | none, partial, full |
 | systems.allocation_method | measured, area, estimated |
+| systems.allocation_notes | Free text |
+| systems.key_specs | Key specs from register (e.g. meter IDs, plant specs) |
+| systems.spec_status | e.g. REAL, PLACEHOLDER |
+| systems.serves_space_ids | Array of space UUIDs (optional) |
+| systems.serves_spaces_description | Human-readable "Serves Spaces" (e.g. "Ground, 4th, 5th", "Whole Building") |
 
 **Demo properties:** For demo/mock property IDs (e.g. Aldersgate), the app may keep field-level overrides in localStorage (`demoPropertyOverrides`) so edits to GFA, asset type, last renovation, etc. persist across re-renders and refreshes; the `propertiesById` memo merges these overrides onto the mock property. Supabase-backed properties are the source of truth for non-demo IDs.
 
@@ -215,6 +235,263 @@ Under Spaces, add a "Create the spaces" flow that builds spaces dynamically and 
 5. **Persistence:** All create/update/delete go to Supabase table "spaces". Include parent_space_id in insert and update. When loading spaces for the property, use supabase.from('spaces').select('*').eq('property_id', propertyId). Build a tree in the UI by grouping rows where parent_space_id is null as roots, and rows where parent_space_id = X as children of space X. Show the hierarchy (e.g. indented or nested) so the user sees tenant vs base building, control type, and subspaces.
 
 6. **Data layer:** Add parent_space_id to the Supabase space interface and to the spaces converter. When creating a subspace, pass parent_space_id; when creating a top-level space, pass parent_space_id: null. List and update must handle parent_space_id so the hierarchy is correct after refresh.
+```
+
+**Implemented in Lovable (current behaviour):** The "Create the spaces" flow with subspace support is in place.
+
+---
+
+## Physical and Technical page — Building Systems (taxonomy + register)
+
+The **Physical and Technical** page hosts **building systems**. The UI must follow the **Building Systems Taxonomy** (categories and system types) and support all data fields from the **Building Systems Register** so users can create and edit systems that match the register, save them to Supabase, and later add **nodes** linked to systems.
+
+**References:**
+- [building-systems-taxonomy.md](../data-model/building-systems-taxonomy.md) — system categories and system types per category.
+- [building-systems-register.md](../sources/140-aldersgate/building-systems-register.md) — example register with columns: System Name, systemCategory, systemType, Controlled By, Maintained By, Serves Spaces, Metering Status, Allocation Method, Key Specs, Spec Status.
+
+**DB:** Table `systems` has columns: name, system_category, system_type, space_class, controlled_by, maintained_by, metering_status, allocation_method, allocation_notes, key_specs, spec_status, serves_space_ids, serves_spaces_description. For existing DBs run: `ALTER TABLE public.systems ADD COLUMN IF NOT EXISTS key_specs text, ADD COLUMN IF NOT EXISTS spec_status text, ADD COLUMN IF NOT EXISTS serves_spaces_description text;`
+
+### UI: Categories from Building Systems Taxonomy
+
+Use these **system categories** as the top-level structure on the Physical and Technical page (e.g. sections or tabs): **Power**, **HVAC**, **Lighting**, **PlugLoads**, **Water**, **Waste**, **BMS**, **Lifts**, **Monitoring**. For each category, the **system types** are fixed per taxonomy (e.g. Power: GridLVSupply, ElectricitySubmeters, GasSupply, UPS, Generator, PVInverter; HVAC: CentralPlant_Unknown, Boilers, ZoneControls, …; Lighting: TenantLighting, LegacyLightingControl, OccupancySensors, …). See [building-systems-taxonomy.md](../data-model/building-systems-taxonomy.md) for the full table.
+
+### Register fields (per system)
+
+When creating or editing a building system, the form should include all fields that appear in the building systems register: **Name**, **System category** (dropdown from taxonomy), **System type** (dropdown dependent on category), **Controlled by** (dropdown: tenant | landlord | shared; default from selected "Serves spaces" when set, user can override), **Maintained by** (text), **Serves spaces** (text description e.g. "Ground, 4th, 5th" or "Whole Building", and optionally link to space IDs), **Metering status** (none | partial | full), **Allocation method** (measured | area | estimated | **mixed** — part measured, part allocated; use Allocation notes to describe the split), **Allocation notes** (text), **Key specs** (text, e.g. meter IDs, plant specs), **Spec status** (e.g. REAL, PLACEHOLDER). Save all of these to the `systems` table in Supabase.
+
+### Lovable prompt: Physical and Technical — Building Systems (taxonomy + register + save)
+
+Paste the following into Lovable to align the Physical and Technical page with the taxonomy and register and persist systems to Supabase.
+
+```
+On the Physical and Technical page (building systems):
+
+1. **UI structure by taxonomy:** Organise the page by the Building Systems Taxonomy categories: Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring. Each category is a section (or tab). Within each section, list the systems that belong to that category (system_category = that category). When adding a new system, the user selects the category first; then the system type dropdown shows only the types for that category (from the taxonomy — e.g. Power: GridLVSupply, ElectricitySubmeters, GasSupply, UPS, Generator, PVInverter; HVAC: CentralPlant_Unknown, Boilers, Chillers, ZoneControls, …; Lighting: TenantLighting, LegacyLightingControl, OccupancySensors, EnvironmentalSensors, GatewayDevices, …). Use the full list from docs/data-model/building-systems-taxonomy.md or the backend repo.
+
+2. **Form fields (building systems register):** When creating or editing a system, the form must include: Name (required), System category (required, from taxonomy), System type (required, dependent on category), Controlled by (dropdown: tenant | landlord | shared — when user selects Serves spaces, default this from the selected spaces' control; user can override), Maintained by (text), Serves spaces (text description, e.g. "Ground, 4th, 5th" or "Whole Building" — store in serves_spaces_description; optionally also link to space IDs in serves_space_ids), Metering status (none | partial | full), Allocation method (measured | area | estimated | mixed), Allocation notes (text; when allocation is "mixed", describe the split e.g. part service charge / part measured), Key specs (text), Spec status (text, e.g. REAL, PLACEHOLDER). All of these must be saved to the Supabase "systems" table. Map form field names to DB columns: system_category, system_type, controlled_by, maintained_by, metering_status, allocation_method, allocation_notes, key_specs, spec_status, serves_spaces_description, serves_space_ids. See [nodes-attribution-and-control.md](../data-model/nodes-attribution-and-control.md).
+
+3. **Persistence:** Create: supabase.from('systems').insert({ account_id: currentAccountId, property_id: propertyId, name, system_category, system_type, space_class (optional), controlled_by, maintained_by, metering_status, allocation_method, allocation_notes, key_specs, spec_status, serves_space_ids, serves_spaces_description }).select().single(). List: supabase.from('systems').select('*').eq('property_id', propertyId). Update and delete by id. After create/update/delete, refetch the systems list so the UI updates.
+
+4. **Database columns:** Ensure the systems table has key_specs, spec_status, and serves_spaces_description. If not, run in Supabase: ALTER TABLE public.systems ADD COLUMN IF NOT EXISTS key_specs text, ADD COLUMN IF NOT EXISTS spec_status text, ADD COLUMN IF NOT EXISTS serves_spaces_description text; To allow allocation_method = 'mixed' (part measured, part allocated), run in Supabase SQL Editor: `ALTER TABLE public.systems DROP CONSTRAINT IF EXISTS systems_allocation_method_check; ALTER TABLE public.systems ADD CONSTRAINT systems_allocation_method_check CHECK (allocation_method IN ('measured', 'area', 'estimated', 'mixed'));`
+
+5. **Next step (nodes):** After systems are in place, we will add the ability to create end-use nodes linked to systems (node_id, node_category, utility_type, system_id, control_override, allocation_weight, etc.). For now, focus on systems only.
+```
+
+### Systems creation: save and category checklist (if systems don’t save or don’t show under the right category)
+
+- **Save failing:** Ensure every insert includes `account_id` (current account) and `property_id` (current property). Both are required and have FK constraints. Check the browser network tab: the request body must contain these; if the UI uses different names (e.g. accountId), map them to `account_id` / `property_id`. Ensure all required fields are sent: `name`, `system_category`, `system_type`, `controlled_by`, `metering_status`, `allocation_method` (use one of: measured, area, estimated, mixed). Check Supabase RLS: the `systems` table must have a policy allowing INSERT for rows where `account_id` is in the user’s memberships (and SELECT for list). If the insert returns an error, surface it in the UI so you can see the exact DB message.
+- **Not showing in DB:** After a successful insert, refetch the list with `supabase.from('systems').select('*').eq('property_id', propertyId)` and update state so the new system appears. If the list is filtered or grouped by `system_category`, ensure the saved row’s `system_category` matches the category the user selected (e.g. "HVAC" not "Hvac" or a different key). Store and send `system_category` exactly as in the taxonomy (Power, HVAC, Lighting, etc.).
+- **Not showing under correct category:** The UI must group or filter the list by `system_category`. When rendering by category, use the same string as stored (e.g. `system.system_category === 'HVAC'`). If the form sends a different value (e.g. from a dropdown that stores an id instead of the category name), fix the mapping so the DB stores the taxonomy category string.
+
+### Debug: systems insert not working
+
+Use this when "Add system" does nothing or fails without a clear error.
+
+**1. Exact payload Supabase expects**
+
+The `systems` table requires these columns on insert (snake_case; values must match exactly):
+
+| Column | Required | Allowed values |
+|--------|----------|----------------|
+| account_id | Yes (FK → accounts) | UUID of an account the current user is a member of |
+| property_id | Yes (FK → properties) | UUID of a property in that account |
+| name | Yes | Any non-empty text |
+| system_category | Yes | One of: Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring, Other |
+| system_type | Yes (can be null in schema but often needed in UI) | e.g. CentralPlant_Unknown, Boilers, ZoneControls (see taxonomy) |
+| controlled_by | Yes | **Exactly** `tenant` or `landlord` or `shared` (lowercase) |
+| metering_status | Yes | **Exactly** `none` or `partial` or `full` (lowercase) |
+| allocation_method | Yes | **Exactly** `measured` or `area` or `estimated` or `mixed` (lowercase) |
+
+Optional: maintained_by, allocation_notes, key_specs, spec_status, serves_space_ids (uuid[]), serves_spaces_description, space_class (`tenant` \| `base_building`).
+
+**2. Typical failures**
+
+- **`systems_controlled_by_check` violated:** The app is sending a value for `controlled_by` that isn't exactly `tenant`, `landlord`, or `shared` (lowercase). For example the UI might send "Tenant", "Landlord", "Shared", or "tenant_controlled" / "landlord_controlled" (from spaces). **Fix:** When building the insert payload, map the form value to lowercase: e.g. if the dropdown shows "Tenant", send `controlled_by: 'tenant'`; if it shows "Landlord", send `controlled_by: 'landlord'`; if "Shared", send `controlled_by: 'shared'`. Do not send space control values (`tenant_controlled` etc.) — those are for the `spaces` table only.
+- **RLS / no row inserted:** User must be **signed in with Supabase Auth** (so `auth.uid()` is set). The `account_id` in the insert must be in `account_memberships` for that user. If the app uses anon key and never signs in, or sends a different account id, insert is blocked.
+- **Other constraint violations:** If the UI sends "Measured" instead of `measured`, or "Partial" instead of `partial`, the CHECK constraints fail. Use **lowercase** enum values in the request body for `metering_status` and `allocation_method` too.
+- **FK violation:** `account_id` must exist in `accounts`; `property_id` must exist in `properties`. Get real IDs from the same Supabase project (e.g. from `properties` table for the current property).
+- **allocation_method:** If your DB was created before we added `mixed`, the CHECK may still only allow measured/area/estimated. Run:  
+  `ALTER TABLE public.systems DROP CONSTRAINT IF EXISTS systems_allocation_method_check;`  
+  `ALTER TABLE public.systems ADD CONSTRAINT systems_allocation_method_check CHECK (allocation_method IN ('measured', 'area', 'estimated', 'mixed'));`
+
+**3. Test insert in Supabase (SQL Editor)**
+
+Run this **after** replacing `YOUR_ACCOUNT_UUID` and `YOUR_PROPERTY_UUID` with real IDs from your `accounts` and `properties` tables (same account for both). If this succeeds, the table and RLS allow the insert; the bug is then in the app (payload or missing auth).
+
+```sql
+INSERT INTO public.systems (
+  account_id,
+  property_id,
+  name,
+  system_category,
+  system_type,
+  controlled_by,
+  metering_status,
+  allocation_method
+) VALUES (
+  'YOUR_ACCOUNT_UUID'::uuid,
+  'YOUR_PROPERTY_UUID'::uuid,
+  'Test HVAC System',
+  'HVAC',
+  'CentralPlant_Unknown',
+  'landlord',
+  'partial',
+  'mixed'
+)
+RETURNING id, name, system_category, created_at;
+```
+
+- If you get "permission denied" or 0 rows: you're likely running as a role that doesn't pass RLS. Run the same INSERT from the **Lovable app** (e.g. via a temporary "Debug" button that does this insert and shows the result/error).
+- If you get "violates check constraint": fix the value shown in the error (e.g. allocation_method or controlled_by).
+- If it succeeds: check in the app that you're sending the same snake_case columns and lowercase enum values, and that `account_id` / `property_id` are the ones from the current context.
+
+**4. In the Lovable app**
+
+- In the handler that creates a system, log or display the **exact object** you pass to `supabase.from('systems').insert(...)` and the **error** from `.then()/.catch()` (e.g. `error.message` and `error.details`). That shows whether payload or RLS is wrong.
+- Ensure the insert uses the **current** account and property (e.g. from context/route), e.g. `account_id: currentAccountId`, `property_id: currentPropertyId`, and that both are UUID strings.
+
+### Short Lovable prompt (copy-paste: allocation, control, save)
+
+Paste this into Lovable when fixing or implementing the building systems form:
+
+```
+Building systems form — fix/implement:
+
+**Allocation method:** Dropdown with exactly four options: Measured, Area, Estimated, Mixed. "Mixed" = part measured and part allocated (e.g. part in service charge, part from submeters). When user selects Mixed, show Allocation notes and prompt them to describe the split (e.g. "Part service charge allocation, part direct meter"). Save as allocation_method: 'measured' | 'area' | 'estimated' | 'mixed'. DB must allow 'mixed' — if insert fails on allocation_method, run in Supabase: ALTER TABLE public.systems DROP CONSTRAINT IF EXISTS systems_allocation_method_check; ALTER TABLE public.systems ADD CONSTRAINT systems_allocation_method_check CHECK (allocation_method IN ('measured', 'area', 'estimated', 'mixed'));
+
+**Controlled by:** Dropdown with Tenant, Landlord, Shared. When the user selects "Serves spaces" (one or more spaces), default the Controlled by dropdown from those spaces' control field: if all selected spaces have the same control (e.g. tenant_controlled), set dropdown to Tenant; if mixed, set to Shared. User can always change the dropdown (override).
+
+**Save and display:** (1) Every insert must include account_id (current account) and property_id (current property). (2) After a successful insert, refetch the systems list with .eq('property_id', propertyId) and update state so the new system appears. (3) Store system_category exactly as the taxonomy string (e.g. "HVAC", "Power") so the system appears under the correct category section. (4) When grouping the list by category, use system.system_category (e.g. filter or group by system_category). (5) If insert fails, show the error message in the UI (e.g. toast or inline) so we can see the Supabase error.
+```
+
+**Quick fix prompt (insert still failing):** Paste this in Lovable:
+
+```
+The "Add system" insert is failing. Fix it:
+
+1. When calling supabase.from('systems').insert(...), the body MUST use snake_case and exact values: account_id (UUID of current account), property_id (UUID of current property), name, system_category (e.g. "HVAC"), system_type (e.g. "CentralPlant_Unknown"), controlled_by ("tenant"|"landlord"|"shared" — lowercase), metering_status ("none"|"partial"|"full" — lowercase), allocation_method ("measured"|"area"|"estimated"|"mixed" — lowercase). Optional: maintained_by, allocation_notes, key_specs, spec_status, serves_space_ids, serves_spaces_description.
+
+2. Get account_id and property_id from the same place other pages use (e.g. current account and selected property). Do not send camelCase (e.g. accountId) — Supabase expects account_id, property_id.
+
+3. On insert, use .then() and .catch(). On error, show the full error to the user (e.g. error.message or JSON.stringify(error)) in a toast or alert so we can see the real Supabase message. On success, refetch the systems list with .eq('property_id', propertyId) and update state.
+
+4. If the error says "violates check constraint", the value for controlled_by, metering_status, or allocation_method is wrong — ensure lowercase and one of the allowed values. **Specifically:** If you see "systems_controlled_by_check", the app is sending something other than exactly "tenant", "landlord", or "shared" (e.g. "Tenant" or "tenant_controlled"). Map the dropdown value to lowercase before sending: controlled_by must be one of tenant | landlord | shared.
+```
+
+### After systems: Nodes
+
+Once building systems are created and saved, the next step is **nodes** (end-use nodes linked to systems). The schema and taxonomy for nodes are in [building-systems-taxonomy.md §2](../data-model/building-systems-taxonomy.md) and [building-systems-register.md §B](../sources/140-aldersgate/building-systems-register.md). For how nodes are **attributed**, **linked to consumption**, and how **control** is derived from spaces, see [nodes-attribution-and-control.md](../data-model/nodes-attribution-and-control.md). Nodes will be added in a follow-up (table `end_use_nodes`, fields: system_id, node_id, node_category, utility_type, control_override, allocation_weight, applies_to_space_ids).
+
+### Upload building systems register (CSV / Excel) — recommended next
+
+Add a button on the Physical and Technical page (e.g. **"Upload register"** or **"Import from file"**) so users can upload a **Building Systems Register** as CSV or Excel and have rows extracted and inserted into the `systems` table. This is **feasible without a backend** by parsing in the browser.
+
+#### Column mapping (spreadsheet → DB)
+
+Match headers case-insensitively and trim spaces. Support these header variants:
+
+| Spreadsheet header (any variant) | DB column | Required | Notes |
+|----------------------------------|-----------|----------|--------|
+| System Name, Name | name | Yes | |
+| systemCategory, System Category, Category | system_category | Yes | One of: Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring, Other. Pass through as-is if already valid; else leave blank and skip row or default to Other. |
+| systemType, System Type, Type | system_type | No | e.g. GridLVSupply, CentralPlant_Unknown |
+| Controlled By, Controlled by | controlled_by | Yes | Normalize with table below |
+| Maintained By, Maintained by | maintained_by | No | |
+| Serves Spaces, Serves spaces | serves_spaces_description | No | |
+| Metering Status, Metering status | metering_status | Yes | Normalize with table below |
+| Allocation Method, Allocation method | allocation_method | Yes | Normalize with table below |
+| Key Specs, Key specs | key_specs | No | |
+| Spec Status, Spec status | spec_status | No | e.g. REAL, PLACEHOLDER |
+
+#### Normalization rules (before insert)
+
+Apply these so the DB CHECK constraints pass. Use lowercase and exact values.
+
+**controlled_by** (output must be `tenant` | `landlord` | `shared`):
+
+- If cell (after trim/lower) contains or equals: tenant, tenant_controlled → `tenant`
+- If contains or equals: landlord, landlord_controlled, landlord (billing) → `landlord`
+- If contains or equals: shared → `shared`
+- Else default to `shared`
+
+**metering_status** (output must be `none` | `partial` | `full`):
+
+- If cell suggests no/not metered: "not tenant-metered", "not metered", "fiscal only", "n/a", "data-only", "included in electricity" → `none`
+- If cell suggests partial: "submetered", "partial", "single fiscal meter", "measured by weight", "direct measured" (when building-level) → `partial`
+- If cell suggests full tenant metering: "submetered" (tenant), "direct measured" (tenant) → `full`
+- Else default to `partial`
+
+**allocation_method** (output must be `measured` | `area` | `estimated` | `mixed`):
+
+- "direct measured", "direct billed", "measured" → `measured`
+- "area allocation", "service charge", "embedded in service charge", "allocation" → `area`
+- "estimated" → `estimated`
+- "mixed", "part measured part allocated", "electricity + service charge" → `mixed`
+- Else default to `estimated`
+
+#### Step-by-step implementation
+
+1. **Button:** On Physical and Technical page, add "Upload register" (or "Import from file"). On click: open file input accepting `.csv`, `.xlsx`.
+2. **Read file:** Use `FileReader` or pass `File` to parser. CSV: Papa Parse with `header: true`. Excel: SheetJS — read first sheet, row 0 = headers, rows 1+ = data; build array of objects `{ [header]: value }`.
+3. **Map columns:** For each row object, build a new object with DB keys. Find each DB column by checking header keys (case-insensitive). Apply normalization for controlled_by, metering_status, allocation_method.
+4. **Validate rows:** Skip or collect errors for rows missing required fields (name, system_category, controlled_by, metering_status, allocation_method). Optionally skip blank rows (all cells empty).
+5. **Preview:** Set state with parsed rows. Show a table (e.g. first 20 rows) with columns: Name, Category, Type, Controlled by, Metering, Allocation. Show total count and "X rows will be imported, Y skipped".
+6. **Confirm:** Buttons "Import" and "Cancel". On Cancel, clear state and close.
+7. **Insert:** On Import, for each valid row call `supabase.from('systems').insert({ account_id: currentAccountId, property_id: currentPropertyId, name, system_category, system_type, controlled_by, metering_status, allocation_method, maintained_by: maintained_by || null, serves_spaces_description: serves_spaces_description || null, key_specs: key_specs || null, spec_status: spec_status || null })`. Use current account and property from app context. Optionally batch (e.g. 10 at a time) to avoid timeouts. Collect errors per row if any.
+8. **Result:** Toast or modal: "N systems added." If any failed: "M failed: [first error message]." Refetch systems list and close preview.
+9. **Optional:** Upload the file to Storage path `account/{accountId}/property/{propertyId}/register-imports/{ISO date}-{sanitized filename}` and insert into `documents` with that path so the register is kept as evidence.
+
+#### Template
+
+A sample CSV with expected headers is in [docs/templates/building-systems-register-template.csv](../templates/building-systems-register-template.csv). Users can export their register to CSV with the same column names (or use the template and fill in).
+
+#### PDF register
+
+Extracting from a **PDF** (scanned or digital) would require a backend or Edge Function (e.g. PDF table extraction) or an AI step. Defer to a later phase; MVP is CSV/Excel only.
+
+#### Import fails: `systems_allocation_method_check`
+
+If the import shows **"Import failed: new row for relation 'systems' violates check constraint 'systems_allocation_method_check'"**, the file’s "Allocation Method" column has values the DB doesn’t accept (e.g. "Service charge allocation", "Direct measured"). The DB only accepts exactly: `measured`, `area`, `estimated`, `mixed` (lowercase).
+
+**Fix (choose one or both):**
+
+1. **Database:** Run the migration that normalizes allocation_method on insert so any phrase is converted to one of the four. In Supabase SQL Editor, run the contents of [docs/database/migrations/fix-systems-allocation-method-import.sql](../database/migrations/fix-systems-allocation-method-import.sql). That adds a trigger to map e.g. "Service charge allocation" → `area`, "Direct measured" → `measured`, etc.
+2. **Lovable:** In the register-import code, normalize the Allocation Method column before calling insert: convert the cell value (case-insensitive) to one of `measured`, `area`, `estimated`, `mixed` using the rules in the "Normalization rules" table above (e.g. "Direct measured"/"Direct billed" → measured; "Service charge"/"Area allocation"/"Embedded in service charge" → area; "mixed"/"part measured" → mixed; else estimated). Then the payload always sends a valid value.
+
+**If you see "systems_metering_status_check":** The "Metering Status" column has values the DB doesn't accept (e.g. "Submetered", "Fiscal only", "Not tenant-metered"). Run in Supabase SQL Editor the contents of [fix-systems-metering-status-import.sql](../database/migrations/fix-systems-metering-status-import.sql) — that trigger normalizes them to `none` | `partial` | `full`.
+
+**If the error persists after running the DB migration:** Paste the **full** Lovable prompt below (the long one starting with "Implement 'Upload register'…") so the import flow is reimplemented with explicit normalization. Or paste this **allocation-only fix** into Lovable if you already have the upload button and preview:
+
+```
+In the register import (Upload register) code: before calling supabase.from('systems').insert() for each row, normalize allocation_method so the payload always has exactly one of: "measured", "area", "estimated", "mixed" (lowercase). Do not send the raw CSV value. Use a function: take the "Allocation Method" cell string (e.g. "Service charge allocation", "Direct measured"), convert to lowercase, then if it includes "direct" and "measured" or "direct" and "billed" → use "measured"; if it includes "service charge" or "area allocation" or "embedded" or "whole building" or "submeter" → use "area"; if it includes "mixed" or "part measured" → use "mixed"; if it includes "estimated" → use "estimated"; otherwise use "estimated". Set the insert payload field allocation_method to this normalized value. Same for metering_status: must be "none", "partial", or "full"; and controlled_by: must be "tenant", "landlord", or "shared" (normalize from Tenant/Landlord/Shared or tenant_controlled/landlord_controlled).
+```
+
+---
+
+**Lovable prompt (full) — paste into Lovable to implement the upload flow:**
+
+```
+Implement "Upload register" on the Physical and Technical (building systems) page.
+
+1. Add an "Upload register" button. On click, open a file input that accepts .csv and .xlsx. Parse the file in the browser: use Papa Parse for CSV (Papa.parse(file, { header: true })) and a library like xlsx/sheetjs for Excel (first sheet, first row = headers). Result: array of objects, each keyed by column header.
+
+2. Map columns to DB (match headers case-insensitively, trim). Map: System Name or Name → name; systemCategory or System Category or Category → system_category; systemType or System Type → system_type; Controlled By → controlled_by; Maintained By → maintained_by; Serves Spaces → serves_spaces_description; Metering Status → metering_status; Allocation Method → allocation_method; Key Specs → key_specs; Spec Status → spec_status.
+
+3. Normalize before insert: controlled_by: Tenant/tenant_controlled → "tenant", Landlord/landlord_controlled → "landlord", else "shared". metering_status: "Not tenant-metered"/"Not metered"/"Fiscal only"/"N/A"/"Data-only" → "none"; "Submetered"/"Direct measured" → "partial" or "full"; else "partial". allocation_method: "Direct measured"/"Direct billed" → "measured"; "Service charge"/"Area allocation"/"Embedded in service charge" → "area"; "mixed"/"part measured" → "mixed"; else "estimated". All values must be lowercase in the payload.
+
+4. Skip rows missing required fields: name, system_category, controlled_by, metering_status, allocation_method. Show how many rows are valid and how many skipped.
+
+5. Show a preview table (e.g. first 20 rows) with: Name, Category, Type, Controlled by, Metering, Allocation. Buttons: "Import" and "Cancel".
+
+6. On Import: for each valid row, insert into supabase.from('systems') with account_id (current account), property_id (current property), and the mapped fields (name, system_category, system_type, controlled_by, metering_status, allocation_method, maintained_by, serves_spaces_description, key_specs, spec_status). Use .insert() per row or in small batches. On success, show "N systems added", refetch the systems list, and close the preview. On error, show the error message and which row failed if possible.
+
+7. Optional: upload the file to supabase.storage.from('secure-documents').upload() under account/{accountId}/property/{propertyId}/register-imports/{date}-{filename} and create a row in documents table for evidence.
+```
+
+**Lovable prompt (short):** Same as before, for quick reference:
+
+```
+On the Physical and Technical (building systems) page, add an "Upload register" button. When clicked, the user selects a CSV or Excel file (.csv, .xlsx). Parse the file in the browser (e.g. Papa Parse for CSV, xlsx/sheetjs for Excel). Map columns to systems table: System Name → name, systemCategory or System Category → system_category, systemType or System Type → system_type, Controlled By → controlled_by (normalize to tenant|landlord|shared), Maintained By → maintained_by, Serves Spaces → serves_spaces_description, Metering Status → metering_status (normalize to none|partial|full), Allocation Method → allocation_method (normalize to measured|area|estimated|mixed), Key Specs → key_specs, Spec Status → spec_status. Normalize enum values (lowercase; Tenant/tenant_controlled → tenant, Landlord/landlord_controlled → landlord). Show a preview table and "Import" / "Cancel". On Import, insert each row into supabase.from('systems') with account_id and property_id set to the current account and property. Show how many were added and refetch the systems list. Skip rows missing required fields (name, system_category, controlled_by, metering_status, allocation_method).
 ```
 
 ---

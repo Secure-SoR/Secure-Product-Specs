@@ -178,9 +178,12 @@ Building system (HVAC, Power, Lighting, etc.). Taxonomy: [data-model/building-sy
 | controlled_by     | text      | NO       | `tenant` \| `landlord` \| `shared` |
 | maintained_by     | text      | YES      | |
 | metering_status   | text      | NO       | `none` \| `partial` \| `full` |
-| allocation_method | text      | NO       | `measured` \| `area` \| `estimated` |
+| allocation_method | text      | NO       | `measured` \| `area` \| `estimated` \| `mixed` (part measured, part allocated; describe split in allocation_notes) |
 | allocation_notes  | text      | YES      | |
+| key_specs         | text      | YES      | Key specs from building systems register (e.g. meter IDs, plant specs) |
+| spec_status       | text      | YES      | e.g. REAL, PLACEHOLDER (from register) |
 | serves_space_ids  | uuid[]    | YES      | Array of space.id |
+| serves_spaces_description | text | YES      | Human-readable "Serves Spaces" (e.g. "Ground, 4th, 5th", "Whole Building") for register alignment |
 | created_at        | timestamptz | NO    | |
 | updated_at        | timestamptz | NO    | |
 

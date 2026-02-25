@@ -11,7 +11,7 @@ When you move on to the **AI agent** project, use this list to keep the agent in
 - [ ] **Accept optional `floorsInScope`** in the agent context: array of floor identifiers the tenant occupies (from `properties.floors_in_scope`). Use it when reasoning about reporting boundary / which floors are in scope.
 - [ ] **Accept optional property fields** if Lovable sends them: e.g. `occupancyScope` (`whole_building` | `partial_building`), `yearBuilt`, `lastRenovation`, `operationalStatus`. No change to required schema; document which optional fields the agent uses.
 - [ ] **Context shape:** Ensure the agent’s expected input schema matches `docs/implementation-plan-lovable-supabase-agent.md` Phase 5 “Agent context shape” (propertyId, propertyName, reportingYear, reportingBoundary, floorsInScope, spaces, systems, nodes, dataLibraryRecords, evidence).
-- [ ] **Spaces hierarchy:** Accept optional `parentSpaceId` (and if sent, nested `children`) on spaces in the context. Spaces can be top-level (tenant vs base building, then control) or subspaces (e.g. meeting rooms under a floor). Use for boundary/scope reasoning if relevant.
+- [ ] **Spaces hierarchy:** Accept optional `parentSpaceId` (and if sent, nested `children`) on spaces in the context. Lovable now stores and sends spaces with parent_space_id; context can be a flat list with parentSpaceId or a tree. Spaces can be top-level (tenant vs base building, then control) or subspaces (e.g. meeting rooms under a floor). Use for boundary/scope reasoning if relevant.
 
 ---
 
@@ -26,6 +26,7 @@ When you move on to the **AI agent** project, use this list to keep the agent in
 ## Data library and evidence (when Phase 3 is done)
 
 - [ ] **dataLibraryRecords / evidence:** If the agent uses these, ensure field names match what Lovable sends (see implementation plan Phase 5). Handle optional or empty arrays.
+- [ ] **Building systems context:** Systems in context follow the Building Systems Taxonomy (categories + types). Optional fields per system: keySpecs, specStatus, servesSpacesDescription (from register). Context shape already has systems array; ensure agent can use category/type and optional register fields if sent.
 
 ---
 
@@ -37,4 +38,4 @@ When you move on to the **AI agent** project, use this list to keep the agent in
 
 ---
 
-*Last sync: Backend has property fields (occupancy_scope, floors_in_scope); spaces have parent_space_id for hierarchy (subspaces). Context shape includes optional floorsInScope and spaces with optional parentSpaceId/children. Update this file when you add tasks or complete them.*
+*Last sync: Backend has property fields (occupancy_scope, floors_in_scope); spaces have parent_space_id; systems + upload register working (DB triggers normalize controlled_by, allocation_method, metering_status). **Next:** (1) Create the Nodes part (end_use_nodes, Phase 4), (2) Data Library (Phase 3), (3) Ensure Scope 1/2/3 calculation is correct, (4) then move on to agent (Phase 5). Context shape includes optional floorsInScope, spaces with parentSpaceId/children, systems with optional register fields. Update this file when you add tasks or complete them.*
