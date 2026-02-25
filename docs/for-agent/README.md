@@ -2,7 +2,9 @@
 
 The **AI agent** (Data Readiness / Boundary) lives in a **separate project** (e.g. `Documents/AI Agents/agent` or similar). This folder holds short notes so that when you work in the agent repo, you can keep it in sync with what the backend and Lovable expect.
 
-**When you move on to the agent project:** Use **[AGENT-TASKS.md](./AGENT-TASKS.md)** for a concrete to-do list (context fields, API contract, deployment) to work through.
+**When you move on to the agent project:** Use **[AGENT-TASKS.md](./AGENT-TASKS.md)** for a concrete to-do list (context fields, API contract, deployment) to work through. **Handoff for the other agent:** [HANDOFF-FOR-AGENT.md](./HANDOFF-FOR-AGENT.md) — instructions so the agent applies to new property records and uses context from the DB, plus how to point the agent project at this backend folder.
+
+**Copy-into-agent folder:** [../handover-files-for-agent/](../handover-files-for-agent/) — self-contained folder (README, CONTEXT-SOURCE.md, INSTRUCTIONS.md, AGENT-TASKS.md, BACKEND-SYNC-NOTES.md) that you can paste as-is into the AI agent project so it has all instructions and context-source references in one place.
 
 **Rule:** For every change that affects data shape or API (properties, spaces, systems, data library, agent context), update this section and the agent project so the agent stays up to date.
 

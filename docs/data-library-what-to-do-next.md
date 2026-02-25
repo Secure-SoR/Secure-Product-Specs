@@ -312,7 +312,7 @@ Use this when **"Upload energy record"** or **"Upload Tenant Electricity Invoice
 
 ## Extracting data from energy PDFs
 
-**Current behaviour:** Upload stores the PDF in Storage, creates a `documents` row, creates a `data_library_record` (with `name` e.g. from filename, `subject_category` "energy", `source_type` "upload"), and links them via `evidence_attachments`. No automatic extraction of period, kWh, or cost from the PDF yet — those can be added via **Manual Entry** (edit the record) or in a future extraction step.
+**Current behaviour:** Upload stores the PDF in Storage, creates a `documents` row, creates a `data_library_record` (with `name` e.g. from filename, `subject_category` "energy", `source_type` "upload"), and links them via `evidence_attachments`. **No automatic extraction** runs yet — we did **not** create a sample PDF to upload; we only documented the *shape* of data from the bill you shared (in [data-library-energy-bill-sample-payload.md](data-library-energy-bill-sample-payload.md)). So no upload (including the sample bill) will auto-fill period, kWh, or cost; the record stays mostly null until you **edit the record** in the app (see "Edit Energy record" prompt below) or until extraction is built later.
 
 **Ways to get data from PDFs:**
 
@@ -337,7 +337,77 @@ The `data_library_records` table already supports the needed fields. For one ele
 | confidence | "measured" / "allocated" / "estimated" / "cost_only" | |
 | value_text | Meter number, MPAN, supplier name | Optional; free text |
 
-**Creating a sample for one property:** You can either (1) provide a sample PDF and we document which fields to extract for that format (e.g. “period from this line, kWh from this table”), or (2) create one sample record manually (in the app or in Supabase) with the above fields filled for one bill, and we add that as a “sample payload” doc (e.g. `docs/data-library-energy-bill-sample-payload.md`) so Lovable or a future extraction service has a concrete target. If PDF parsing is too heavy for now, the sample payload approach is enough to align the UI and API on the shape of one extracted bill.
+**Sample bill documented:** The sample electricity invoice (UrbanGrid Energy Ltd, January 2026, Lumen Technology HQ) is documented in [data-library-energy-bill-sample-payload.md](data-library-energy-bill-sample-payload.md). That doc maps every bill field to the database (e.g. Total Consumption → `value_numeric` + `unit` kWh, period → `reporting_period_start`/`end`, supplier/invoice → `value_text`), gives a canonical JSON payload for one record, extraction hints for OCR/parser/AI, and a manual-entry checklist. Use it for manual entry after upload or as the target for future PDF extraction.
+
+---
+
+### Lovable prompt: Edit Energy record — form to fill and save bill data to Supabase
+
+Use this when **uploaded energy records in Supabase have null for period, consumption, cost, etc.** (only name is set). The user must be able to open a record, edit those fields, and save so the `data_library_records` row is updated in Supabase.
+
+```
+When a user opens an Energy (or other Data Library) record in the drawer (View), they must be able to EDIT the record and save the following fields to Supabase so the record is no longer mostly null.
+
+1. Add an "Edit" mode or "Edit record" action in the record drawer (the same drawer that shows Evidence & Attachments). When the user clicks Edit, show a form with these fields, pre-filled from the current record:
+
+   - **Record name** (name) — text
+   - **Reporting period start** (reporting_period_start) — date picker
+   - **Reporting period end** (reporting_period_end) — date picker
+   - **Consumption / quantity** (value_numeric) — number
+   - **Unit** (unit) — dropdown or text, e.g. kWh, GBP, m³
+   - **Confidence** (confidence) — dropdown: measured, allocated, estimated, cost_only
+   - **Notes / supplier / cost** (value_text) — textarea, for supplier name, invoice ref, net cost, total due (e.g. "Supplier: UrbanGrid; Invoice: UGE-0126-LTHQ; Net £7,918.74; Total £9,684.89")
+   - Optional: **Data type** (data_type) — e.g. tenant_electricity, gas, landlord_recharge
+
+2. On Save, call Supabase to update the record:
+   supabase.from('data_library_records').update({
+     name,
+     reporting_period_start,
+     reporting_period_end,
+     value_numeric,
+     unit,
+     confidence,
+     value_text,
+     data_type,
+     updated_at: new Date().toISOString()
+   }).eq('id', recordId)
+
+3. After a successful update, refetch the record (or invalidate the query) so the drawer and any table show the new values. The row in Supabase should now have these columns populated instead of null.
+
+4. Apply this pattern for Energy records at minimum; ideally the same Edit form (with the same Supabase columns) is available for other subject_category values (e.g. waste, water) so any uploaded record can be completed with period, quantity, and notes.
+```
+
+**What you do:** Paste this prompt into Lovable. After it’s implemented, open an uploaded energy record → Edit → fill Reporting period (e.g. 2026-01-01 to 2026-01-31), Consumption (e.g. 30340), Unit (kWh), Confidence (Measured), and Notes (supplier/cost) → Save. The record in Supabase will then have those fields populated instead of null.
+
+---
+
+### Lovable prompt: Delete Data Library record (from UI and DB)
+
+Use this when you need to **remove records** the user has added (e.g. test uploads) from both the UI and Supabase. The user must be able to delete a record and have it removed from the list and from the database (including attachments and optionally the stored file).
+
+```
+Data Library records must be deletable from the UI. When the user deletes a record, remove it from Supabase and from the UI so it no longer appears.
+
+1. Add a "Delete record" (or "Remove record") action:
+   - In the record drawer (when viewing a record): a Delete button, e.g. in the header or footer.
+   - And/or in the table: a row action (e.g. kebab menu or icon) "Delete" per row.
+
+2. On Delete, show a confirmation dialog: e.g. "Delete this record? This will remove the record and its evidence links. The uploaded file(s) can optionally be removed from storage." User confirms or cancels.
+
+3. When the user confirms, perform in order:
+   (a) Get all evidence_attachments for this record: supabase.from('evidence_attachments').select('document_id').eq('data_library_record_id', recordId).
+   (b) For each linked document_id, optionally delete the file from Storage (bucket secure-documents, path from documents.storage_path) and then delete the row from documents. If you prefer to keep files and only unlink, you can skip Storage + documents delete and only delete evidence_attachments.
+   (c) Delete all evidence_attachments for this record: supabase.from('evidence_attachments').delete().eq('data_library_record_id', recordId).
+   (d) Delete the record: supabase.from('data_library_records').delete().eq('id', recordId).
+
+4. After successful delete, close the drawer if open, refetch the records list (or invalidate the query), and show a success message (e.g. "Record deleted"). The record disappears from the table and from Supabase.
+
+5. Apply to all Data Library category pages (Energy, Water, Waste, Certificates, ESG, etc.) so any record can be deleted the same way.
+```
+
+**What you do:** Paste this prompt into Lovable. After it is implemented, open each of the 3 uploaded records (or use the row action) → Delete → confirm. The records will be removed from the UI and from Supabase. If the app also deletes the linked documents and Storage files, those PDFs will be removed too; otherwise only the record and evidence links are removed (the files stay in Storage until you clean them up manually in Supabase Dashboard if needed).
+
+**To delete existing records only in Supabase (without UI):** In Supabase Table Editor, for each record id: (1) delete rows in `evidence_attachments` where `data_library_record_id` = that id; (2) delete the row in `data_library_records` with that id. Optionally delete the corresponding `documents` rows and the files in Storage → secure-documents.
 
 ---
 
