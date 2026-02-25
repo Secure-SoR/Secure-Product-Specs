@@ -55,12 +55,13 @@ Goal: Create properties, add spaces/systems and data library (bills, governance)
 ### Lovable
 
 1. **Properties**
-   - **Create:** When user adds a property, `supabase.from('properties').insert({ account_id: currentAccountId, name, address, country, floors, total_area })`. Use returned `id` as `propertyId`.
+   - **Create:** When user adds a property, `supabase.from('properties').insert({ account_id: currentAccountId, name, address, city, region, postcode, country, nla, asset_type, year_built, last_renovation, operational_status, floors, total_area })`. Use returned `id` as `propertyId`.
    - **List:** `supabase.from('properties').select('*').eq('account_id', currentAccountId)`.
    - **Update / delete:** Use `.update()` / `.delete()` with the property `id`. RLS will allow only if `account_id` matches the user’s membership.
-2. **Spaces**
-   - **Create:** `supabase.from('spaces').insert({ property_id, name, space_class, control, space_type, area, floor_reference, in_scope })`. `space_class`: `tenant` | `base_building`. `control`: `landlord_controlled` | `tenant_controlled` | `shared`.
-   - **List:** `supabase.from('spaces').select('*').eq('property_id', propertyId)`.
+2. **Spaces** (hierarchy: top-level spaces and subspaces via parent_space_id)
+   - **Create:** `supabase.from('spaces').insert({ property_id, parent_space_id: null | parentId, name, space_class, control, space_type, area, floor_reference, in_scope })`. Level 1: `space_class` = `tenant` | `base_building`. Level 2: `control` = `tenant_controlled` | `landlord_controlled` | `shared`. Base building can use `space_type` e.g. common_area, shared_space. Subspaces: set `parent_space_id` to the parent space id.
+   - **List:** `supabase.from('spaces').select('*').eq('property_id', propertyId)`; build tree in app using `parent_space_id` (null = root).
+   - **Update / delete:** Include `parent_space_id` in update; on delete of a space, cascade deletes children (or reassign).
 3. **Systems**
    - **Create:** `supabase.from('systems').insert({ account_id: currentAccountId, property_id, name, system_category, system_type, controlled_by, metering_status, allocation_method, serves_space_ids })`. `system_category`: e.g. Power, HVAC, Lighting, Water, Waste, BMS, Lifts (see [building-systems-taxonomy.md](../data-model/building-systems-taxonomy.md)). `controlled_by`: `tenant` | `landlord` | `shared`. `serves_space_ids`: array of space UUIDs.
    - **List:** `supabase.from('systems').select('*').eq('property_id', propertyId)`.
@@ -70,16 +71,151 @@ Goal: Create properties, add spaces/systems and data library (bills, governance)
 | Supabase column   | Example value / notes |
 |-------------------|------------------------|
 | properties.name   | Property name |
-| properties.address, .country, .floors, .total_area | Optional |
+| properties.address | Street/address line (optional) |
+| properties.city, .region, .postcode, .country, .nla | Optional; city, region, postcode, nla persisted separately (not concatenated into address) |
+| properties.asset_type | Optional; e.g. Office, Retail, Industrial; default `'Office'` in DB |
+| properties.year_built, .last_renovation | Optional; integer (4-digit year) |
+| properties.operational_status | Optional; e.g. operational, under_construction, vacant |
+| properties.occupancy_scope | Optional; `whole_building` \| `partial_building` — tenant footprint at this property (selected on spaces subpage) |
+| properties.floors | All floor identifiers in the building (property overview) |
+| properties.floors_in_scope | Optional; subset of floors the tenant occupies (saved from "Floors in Scope" tile on spaces subpage; persist on Save) |
+| properties.total_area | Optional |
+| spaces.parent_space_id | null = top-level; set to parent space id for subspaces (e.g. meeting rooms under a floor) |
 | spaces.space_class | `tenant` \| `base_building` |
 | spaces.control    | `tenant_controlled` \| `landlord_controlled` \| `shared` |
+| spaces.space_type  | e.g. common_area, shared_space, meeting_room, office (for base building and subspaces) |
 | systems.system_category | Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring |
 | systems.system_type | e.g. GridLVSupply, Boilers, TenantLighting |
 | systems.controlled_by | tenant, landlord, shared |
 | systems.metering_status | none, partial, full |
 | systems.allocation_method | measured, area, estimated |
 
+**Demo properties:** For demo/mock property IDs (e.g. Aldersgate), the app may keep field-level overrides in localStorage (`demoPropertyOverrides`) so edits to GFA, asset type, last renovation, etc. persist across re-renders and refreshes; the `propertiesById` memo merges these overrides onto the mock property. Supabase-backed properties are the source of truth for non-demo IDs.
+
 **Done when:** You can create a property, add spaces and systems in the app, and see them in Supabase Table Editor.
+
+### Optional: Ownership / tenure (“ownership structure”)
+
+**What it means:** “Ownership structure” usually means one or both of:
+
+1. **Property-level:** Does your organisation **own** this property, **lease** it, or hold it in a **joint venture**? (Sometimes called *tenure* or *ownership type*.) That can be a single field per property (e.g. `ownership_type`: `owned` | `leased` | `joint_venture`) or plus an optional **equity share %** for JVs.
+2. **Account-level:** *How* you draw the reporting boundary — **operational control**, **financial control**, or **equity share**. That’s already in **`account.reporting_boundary`** (e.g. `boundaryApproach`), not on the property.
+
+**What you already have:** Landlord vs tenant **control** is on **spaces** (`control`) and **systems** (`controlled_by`). The **reporting boundary** (operational / financial / equity-share) is on the **account** (`reporting_boundary`). So for the Boundary/Data Readiness agent you don’t *need* a separate “ownership structure” at property level for the MVP.
+
+**Recommendation:**  
+- **MVP:** You can **skip** persisting property-level “ownership structure” until the UI or reporting clearly needs it. Focus on properties, spaces, systems, then data library and the agent.  
+- **Later:** If the Lovable UI has a field like “Own or lease?” or “Equity share %”, add a column to `properties` (e.g. `ownership_type` text or `tenure` text, and optionally `equity_share` numeric), wire it in the Supabase hook and `useProperties` like `asset_type`, and document it in [schema.md](../database/schema.md) and here.
+
+### For the AI agent
+
+- Property data is read from Supabase table `properties` (by `account_id`). When Lovable builds the agent context (Phase 5), it will fetch properties from Supabase; the **context shape** (propertyId, propertyName, spaces, systems, etc.) is unchanged. No agent code change required for Phase 2; keep using the same context schema.
+
+---
+
+## Lovable prompt for Phase 2 (properties)
+
+You can paste this into Lovable to implement **properties** in Supabase (create, list, update, delete). Use this first; add spaces and systems in a follow-up if needed.
+
+```
+Use Supabase for properties instead of localStorage.
+
+1. When the user creates a property, insert into the Supabase table "properties" with: account_id = currentAccountId (from AccountContext), name (required), and optionally address, city, region, postcode, country, nla, asset_type (e.g. 'Office', default in DB), year_built (integer), last_renovation (integer), operational_status (text), floors (JSON array of floor identifiers), total_area (number). Keep city, region, postcode, nla as separate columns (do not concatenate into address). Use .select('id').single() or .select().single() to get the new row and use its id as the property id in the app.
+
+2. When loading the list of properties, use: supabase.from('properties').select('*').eq('account_id', currentAccountId). Use the returned rows as the source of truth; do not read the property list from localStorage.
+
+3. When the user updates a property, use supabase.from('properties').update({ name, address, city, region, postcode, country, nla, asset_type, year_built, last_renovation, operational_status, occupancy_scope, floors, floors_in_scope, total_area, updated_at: new Date().toISOString() }).eq('id', propertyId). When they delete a property, use supabase.from('properties').delete().eq('id', propertyId).
+
+4. Ensure currentAccountId is set (from account_memberships after login) before any property query. Use the same Supabase client and auth session you already use for account creation and login.
+```
+
+---
+
+## Lovable prompt for Phase 2 (spaces)
+
+Use this in Lovable after properties are in Supabase. It wires **spaces** (within a property) to the Supabase table `spaces`.
+
+```
+Use Supabase for spaces within a property instead of localStorage.
+
+1. When the user creates a space for a property, insert into the Supabase table "spaces" with: property_id = the current property's id, parent_space_id = null for top-level or the parent space's id for a subspace, name (required), space_class (required: "tenant" or "base_building"), control (required: "landlord_controlled", "tenant_controlled", or "shared"), and optionally space_type (e.g. common_area, shared_space, meeting_room, office), area, floor_reference, in_scope (default true), net_zero_included, gresb_reporting. Use .select('id').single() or .select().single() to get the new row and use its id in the app.
+
+2. When loading the list of spaces for a property, use: supabase.from('spaces').select('*').eq('property_id', propertyId). Build a tree in the app: rows with parent_space_id null are top-level; rows with parent_space_id = X are children of space X. Use the returned rows as the source of truth; do not read the space list from localStorage.
+
+3. When the user updates a space, use supabase.from('spaces').update({ parent_space_id, name, space_class, control, space_type, area, floor_reference, in_scope, net_zero_included, gresb_reporting, updated_at: new Date().toISOString() }).eq('id', spaceId). When they delete a space, use supabase.from('spaces').delete().eq('id', spaceId). Deleting a parent will cascade to children if ON DELETE CASCADE is set on parent_space_id.
+
+4. Only load or mutate spaces when you have a valid propertyId that belongs to the current account (the property should already be loaded from Supabase). Use the same Supabase client you use for properties.
+```
+
+---
+
+## Lovable prompt: Whole building vs partial building tenant (occupancy scope)
+
+The property overview already captures building info (e.g. 5 floors, total area). The tenant’s **footprint** at that property — whole building or partial — is one value per property and is captured on the **spaces subpage**. Add a `properties.occupancy_scope` column and a selector in the UI; use the prompt below in Lovable.
+
+**Supabase (run once if the column is missing):**  
+`ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS occupancy_scope text;`
+
+**Prompt to paste into Lovable:**
+
+```
+Add "Whole building tenant" vs "Partial building tenant" for the current property and persist it in Supabase.
+
+1. Database: Ensure the properties table has a column occupancy_scope (text, nullable). If not, run in Supabase SQL Editor: ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS occupancy_scope text;
+
+2. On the spaces subpage (the page where the user manages spaces for a property), add a selector or radio group: "Whole building tenant" and "Partial building tenant". This describes whether the tenant (the logged-in account) occupies the whole building at this property or only part of it. Place it near the top of the spaces section so the user selects it before or while defining spaces.
+
+3. Persist to Supabase: When the user selects an option, update the current property row: supabase.from('properties').update({ occupancy_scope: 'whole_building' | 'partial_building', updated_at: new Date().toISOString() }).eq('id', propertyId). When loading the property (e.g. on property overview or spaces page), include occupancy_scope in the select so the UI can show the current selection.
+
+4. Wire the data layer: Add occupancy_scope to the Supabase property interface and to the useProperties converter (e.g. occupancyScope: row.occupancy_scope ?? null). On update, map the UI value (e.g. occupancyScope) to occupancy_scope in the Supabase update payload.
+```
+
+---
+
+## Lovable prompt: Floors in Scope tile — save to Supabase
+
+The property has a total number of floors (from property overview); on the spaces subpage the **Floors in Scope** tile shows all building floors and lets the tenant select which are in scope. Those selections are not persisted. Add `properties.floors_in_scope` (jsonb) and a Save action so the selection is stored in Supabase.
+
+**Supabase (run once if the column is missing):**  
+`ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS floors_in_scope jsonb;`
+
+**Prompt to paste into Lovable:**
+
+```
+The "Floors in Scope" tile on the spaces subpage shows all floors of the building (from the property) and lets the tenant select which floors are in scope. Right now there is no way to save that selection. Add persistence to Supabase.
+
+1. Database: Ensure the properties table has a column floors_in_scope (jsonb, nullable). It stores the list of floor identifiers the tenant has selected as in scope (e.g. ["Ground", "1", "2"]). If the column is missing, run in Supabase SQL Editor: ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS floors_in_scope jsonb;
+
+2. Add a Save button (or "Save floors in scope" action) to the Floors in Scope tile. When the user has selected which floors are in scope and clicks Save, update the current property: supabase.from('properties').update({ floors_in_scope: <array of selected floor identifiers>, updated_at: new Date().toISOString() }).eq('id', propertyId).
+
+3. Load and display: When loading the property for the spaces page, include floors_in_scope in the select. When the tile renders, pre-select the floors that are in floors_in_scope (if any) so the UI reflects the saved state. The list of all floors still comes from the property (e.g. property.floors); the selected subset is property.floorsInScope from row.floors_in_scope.
+
+4. Data layer: Add floors_in_scope to the Supabase property interface and to the useProperties converter (e.g. floorsInScope: row.floors_in_scope ?? null). Include floors_in_scope (or floorsInScope mapped to floors_in_scope) in the property update payload when saving so the Save action persists correctly.
+```
+
+---
+
+## Lovable prompt: Create the spaces (hierarchy + subspaces)
+
+Under **Spaces**, a new category **"Create the spaces"** lets the user define which spaces exist on each floor in a two-level hierarchy, then add **subspaces** (e.g. meeting rooms under a tenant floor). All data is stored in Supabase table `spaces`; subspaces use `parent_space_id`. Ensure the `spaces` table has column `parent_space_id` (uuid, nullable, FK to spaces.id). If missing, run: `ALTER TABLE public.spaces ADD COLUMN IF NOT EXISTS parent_space_id uuid REFERENCES public.spaces(id) ON DELETE CASCADE;` and `CREATE INDEX IF NOT EXISTS idx_spaces_parent_space_id ON public.spaces(parent_space_id);`
+
+**Prompt to paste into Lovable:**
+
+```
+Under Spaces, add a "Create the spaces" flow that builds spaces dynamically and saves everything to Supabase.
+
+1. **Button / entry:** Add a clear entry point (e.g. "Create the spaces" button) that starts the flow. The idea: first define which spaces we have on each floor (tenant vs base building, then control type), then optionally add subspaces under any space (e.g. "Tenant space Floor 2, tenant_controlled" can have subspaces "meeting rooms", "office").
+
+2. **Level 1 — Tenant spaces vs Base building spaces:** When the user adds a space, they choose space_class: "tenant" or "base_building". For base building spaces, allow naming or typing common areas and shared spaces (use space_type e.g. "common_area", "shared_space" or name).
+
+3. **Level 2 — Control:** For each space (tenant or base building), they choose control: "tenant_controlled", "landlord_controlled", or "shared". So we get e.g. "Tenant space, tenant_controlled" or "Base building, landlord_controlled (common areas)".
+
+4. **Subspaces:** Allow the user to add subspaces under any existing space. Example: "Tenant space Floor 2, tenant_controlled" → add subspace "Meeting rooms" or "Office". In Supabase, store these with parent_space_id = the parent space's id. Top-level spaces have parent_space_id = null. When creating a subspace, insert with property_id = current property, parent_space_id = selected parent space id, name, space_class (can inherit or choose), control, space_type (e.g. meeting_room, office).
+
+5. **Persistence:** All create/update/delete go to Supabase table "spaces". Include parent_space_id in insert and update. When loading spaces for the property, use supabase.from('spaces').select('*').eq('property_id', propertyId). Build a tree in the UI by grouping rows where parent_space_id is null as roots, and rows where parent_space_id = X as children of space X. Show the hierarchy (e.g. indented or nested) so the user sees tenant vs base building, control type, and subspaces.
+
+6. **Data layer:** Add parent_space_id to the Supabase space interface and to the spaces converter. When creating a subspace, pass parent_space_id; when creating a top-level space, pass parent_space_id: null. List and update must handle parent_space_id so the hierarchy is correct after refresh.
+```
 
 ---
 
@@ -151,7 +287,8 @@ The agent expects a JSON body like the example in the AI Agents repo: `agent/con
 
 - `propertyId`, `propertyName`, `reportingYear`
 - `reportingBoundary` (optional): e.g. `{ boundaryApproach, includedPropertyIds, methodologyFramework }`
-- `spaces`: array of `{ id, name, spaceClass, control, inScope, area }`
+- `floorsInScope` (optional): array of floor identifiers the tenant occupies (from `properties.floors_in_scope`); helps agent reason about reporting boundary
+- `spaces`: array of `{ id, name, spaceClass, control, inScope, area, floorReference, spaceType, parentSpaceId }`; optional `parentSpaceId` for hierarchy (subspaces); optional `children` array when sending a tree. Flat list is fine; agent can build tree from parentSpaceId.
 - `systems`: array of `{ id, category, controlledBy, meteringStatus, allocationMethod, servesSpaces }` (agent accepts `category`; DB has `system_category` + `system_type` — map when building context)
 - `nodes` (optional): array of `{ id, systemId, type, controlOverride, allocationWeight, spaceIds }`
 - `dataLibraryRecords`: array of `{ id, category, reportingYear, propertyId, confidenceLevel }` (and optionally more fields)
@@ -186,11 +323,11 @@ The agent expects a JSON body like the example in the AI Agents repo: `agent/con
 
 ### Secure backend repo (this repo)
 
-- No code changes. Keep [schema.md](../database/schema.md) and [architecture](architecture/architecture.md) as the reference. This plan lives in `docs/implementation-plan-lovable-supabase-agent.md`.
+- No code changes. Keep [schema.md](../database/schema.md) and [architecture](architecture/architecture.md) as the reference. This plan lives in `docs/implementation-plan-lovable-supabase-agent.md`. For **every change** that affects the agent (data shape, context, API), update [docs/for-agent/README.md](for-agent/README.md) and the AI agent project so the agent stays in sync.
 
 ### AI Agents folder
 
-- No change. The agent already accepts context and returns findings. Ensure the deployed agent URL is the one Lovable calls. If you run the agent locally, use a tunnel (e.g. ngrok) or deploy to Render (or similar) and point Lovable at that URL.
+- No change. The agent already accepts context and returns findings. Ensure the deployed agent URL is the one Lovable calls. If you run the agent locally, use a tunnel (e.g. ngrok) or deploy to Render (or similar) and point Lovable at that URL. When you work in the agent repo, use [docs/for-agent/README.md](for-agent/README.md) as the sync checklist.
 
 ---
 

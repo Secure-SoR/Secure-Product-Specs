@@ -36,25 +36,36 @@ CREATE TABLE IF NOT EXISTS public.account_memberships (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(account_id, user_id)
 );
-CREATE INDEX idx_account_memberships_user_id ON public.account_memberships(user_id);
-CREATE INDEX idx_account_memberships_account_id ON public.account_memberships(account_id);
+CREATE INDEX IF NOT EXISTS idx_account_memberships_user_id ON public.account_memberships(user_id);
+CREATE INDEX IF NOT EXISTS idx_account_memberships_account_id ON public.account_memberships(account_id);
 
 CREATE TABLE IF NOT EXISTS public.properties (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
   name text NOT NULL,
   address text,
+  city text,
+  region text,
+  postcode text,
   country text,
+  nla text,
+  asset_type text DEFAULT 'Office',
+  year_built integer,
+  last_renovation integer,
+  operational_status text,
+  occupancy_scope text,
   floors jsonb,
+  floors_in_scope jsonb,
   total_area numeric,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_properties_account_id ON public.properties(account_id);
+CREATE INDEX IF NOT EXISTS idx_properties_account_id ON public.properties(account_id);
 
 CREATE TABLE IF NOT EXISTS public.spaces (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  parent_space_id uuid REFERENCES public.spaces(id) ON DELETE CASCADE,
   name text NOT NULL,
   space_class text NOT NULL CHECK (space_class IN ('tenant', 'base_building')),
   control text NOT NULL CHECK (control IN ('landlord_controlled', 'tenant_controlled', 'shared')),
@@ -67,7 +78,8 @@ CREATE TABLE IF NOT EXISTS public.spaces (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_spaces_property_id ON public.spaces(property_id);
+CREATE INDEX IF NOT EXISTS idx_spaces_property_id ON public.spaces(property_id);
+CREATE INDEX IF NOT EXISTS idx_spaces_parent_space_id ON public.spaces(parent_space_id);
 
 CREATE TABLE IF NOT EXISTS public.systems (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -86,8 +98,8 @@ CREATE TABLE IF NOT EXISTS public.systems (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_systems_account_id ON public.systems(account_id);
-CREATE INDEX idx_systems_property_id ON public.systems(property_id);
+CREATE INDEX IF NOT EXISTS idx_systems_account_id ON public.systems(account_id);
+CREATE INDEX IF NOT EXISTS idx_systems_property_id ON public.systems(property_id);
 
 CREATE TABLE IF NOT EXISTS public.meters (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -101,9 +113,9 @@ CREATE TABLE IF NOT EXISTS public.meters (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_meters_account_id ON public.meters(account_id);
-CREATE INDEX idx_meters_property_id ON public.meters(property_id);
-CREATE INDEX idx_meters_system_id ON public.meters(system_id);
+CREATE INDEX IF NOT EXISTS idx_meters_account_id ON public.meters(account_id);
+CREATE INDEX IF NOT EXISTS idx_meters_property_id ON public.meters(property_id);
+CREATE INDEX IF NOT EXISTS idx_meters_system_id ON public.meters(system_id);
 
 CREATE TABLE IF NOT EXISTS public.end_use_nodes (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -121,8 +133,8 @@ CREATE TABLE IF NOT EXISTS public.end_use_nodes (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(property_id, node_id)
 );
-CREATE INDEX idx_end_use_nodes_account_id ON public.end_use_nodes(account_id);
-CREATE INDEX idx_end_use_nodes_system_id ON public.end_use_nodes(system_id);
+CREATE INDEX IF NOT EXISTS idx_end_use_nodes_account_id ON public.end_use_nodes(account_id);
+CREATE INDEX IF NOT EXISTS idx_end_use_nodes_system_id ON public.end_use_nodes(system_id);
 
 CREATE TABLE IF NOT EXISTS public.data_library_records (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -142,8 +154,8 @@ CREATE TABLE IF NOT EXISTS public.data_library_records (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_data_library_records_account_id ON public.data_library_records(account_id);
-CREATE INDEX idx_data_library_records_property_id ON public.data_library_records(property_id);
+CREATE INDEX IF NOT EXISTS idx_data_library_records_account_id ON public.data_library_records(account_id);
+CREATE INDEX IF NOT EXISTS idx_data_library_records_property_id ON public.data_library_records(property_id);
 
 CREATE TABLE IF NOT EXISTS public.documents (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -155,7 +167,7 @@ CREATE TABLE IF NOT EXISTS public.documents (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_documents_account_id ON public.documents(account_id);
+CREATE INDEX IF NOT EXISTS idx_documents_account_id ON public.documents(account_id);
 
 CREATE TABLE IF NOT EXISTS public.evidence_attachments (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -164,8 +176,8 @@ CREATE TABLE IF NOT EXISTS public.evidence_attachments (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(data_library_record_id, document_id)
 );
-CREATE INDEX idx_evidence_attachments_record_id ON public.evidence_attachments(data_library_record_id);
-CREATE INDEX idx_evidence_attachments_document_id ON public.evidence_attachments(document_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_attachments_record_id ON public.evidence_attachments(data_library_record_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_attachments_document_id ON public.evidence_attachments(document_id);
 
 CREATE TABLE IF NOT EXISTS public.agent_runs (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -178,7 +190,7 @@ CREATE TABLE IF NOT EXISTS public.agent_runs (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_agent_runs_account_id ON public.agent_runs(account_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_account_id ON public.agent_runs(account_id);
 
 CREATE TABLE IF NOT EXISTS public.agent_findings (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -187,7 +199,7 @@ CREATE TABLE IF NOT EXISTS public.agent_findings (
   payload jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_agent_findings_agent_run_id ON public.agent_findings(agent_run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_findings_agent_run_id ON public.agent_findings(agent_run_id);
 
 CREATE TABLE IF NOT EXISTS public.audit_events (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -200,9 +212,9 @@ CREATE TABLE IF NOT EXISTS public.audit_events (
   after_state jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_audit_events_account_id ON public.audit_events(account_id);
-CREATE INDEX idx_audit_events_entity ON public.audit_events(entity_type, entity_id);
-CREATE INDEX idx_audit_events_created_at ON public.audit_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_events_account_id ON public.audit_events(account_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_entity ON public.audit_events(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON public.audit_events(created_at);
 
 -- ============================================================================
 -- PART 2: ENABLE RLS ON ALL TABLES
@@ -226,6 +238,35 @@ ALTER TABLE public.audit_events ENABLE ROW LEVEL SECURITY;
 -- ============================================================================
 -- PART 3: CREATE POLICIES (account_memberships now exists)
 -- ============================================================================
+-- Drop existing policies so this script can be re-run (PostgreSQL has no CREATE POLICY IF NOT EXISTS).
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Members can read their accounts" ON public.accounts;
+DROP POLICY IF EXISTS "Admins can update their accounts" ON public.accounts;
+DROP POLICY IF EXISTS "Users can read own memberships" ON public.account_memberships;
+DROP POLICY IF EXISTS "Admins can update memberships in their account" ON public.account_memberships;
+DROP POLICY IF EXISTS "Admins can delete memberships in their account" ON public.account_memberships;
+DROP POLICY IF EXISTS "Members can read properties in their accounts" ON public.properties;
+DROP POLICY IF EXISTS "Members can insert properties in their accounts" ON public.properties;
+DROP POLICY IF EXISTS "Members can update properties in their accounts" ON public.properties;
+DROP POLICY IF EXISTS "Members can delete properties in their accounts" ON public.properties;
+DROP POLICY IF EXISTS "Members can manage spaces in their account properties" ON public.spaces;
+DROP POLICY IF EXISTS "Members can read systems in their accounts" ON public.systems;
+DROP POLICY IF EXISTS "Members can insert systems in their accounts" ON public.systems;
+DROP POLICY IF EXISTS "Members can update systems in their accounts" ON public.systems;
+DROP POLICY IF EXISTS "Members can delete systems in their accounts" ON public.systems;
+DROP POLICY IF EXISTS "Members can manage meters in their accounts" ON public.meters;
+DROP POLICY IF EXISTS "Members can manage end_use_nodes in their accounts" ON public.end_use_nodes;
+DROP POLICY IF EXISTS "Members can manage data_library_records in their accounts" ON public.data_library_records;
+DROP POLICY IF EXISTS "Members can manage documents in their accounts" ON public.documents;
+DROP POLICY IF EXISTS "Members can manage evidence_attachments for records in their accounts" ON public.evidence_attachments;
+DROP POLICY IF EXISTS "Members can read agent_runs in their accounts" ON public.agent_runs;
+DROP POLICY IF EXISTS "Members can insert agent_runs in their accounts" ON public.agent_runs;
+DROP POLICY IF EXISTS "Members can update agent_runs in their accounts" ON public.agent_runs;
+DROP POLICY IF EXISTS "Members can read agent_findings for runs in their accounts" ON public.agent_findings;
+DROP POLICY IF EXISTS "Members can insert agent_findings for runs in their accounts" ON public.agent_findings;
+DROP POLICY IF EXISTS "Members can read audit_events in their accounts" ON public.audit_events;
+DROP POLICY IF EXISTS "Members can insert audit_events" ON public.audit_events;
 
 -- profiles
 CREATE POLICY "Users can read own profile"

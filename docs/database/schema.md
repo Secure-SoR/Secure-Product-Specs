@@ -116,27 +116,40 @@ Property (building/site). Account-scoped.
 | id         | uuid      | NO       | PK |
 | account_id | uuid      | NO       | FK → accounts.id |
 | name       | text      | NO       | |
-| address    | text      | YES      | |
+| address    | text      | YES      | Street/address line |
+| city       | text      | YES      | City |
+| region     | text      | YES      | Region / state |
+| postcode   | text      | YES      | Postcode / ZIP |
 | country    | text      | YES      | |
-| floors     | jsonb     | YES      | Array of floor identifiers |
+| nla        | text      | YES      | Net lettable area (or similar) |
+| asset_type | text      | YES      | e.g. Office, Retail, Industrial; Lovable may default to `'Office'` |
+| year_built | integer   | YES      | Year built (4-digit) |
+| last_renovation | integer | YES      | Year of last major renovation (4-digit) |
+| operational_status | text | YES      | e.g. operational, under_construction, vacant |
+| occupancy_scope    | text | YES      | Tenant footprint: `whole_building` \| `partial_building` (spaces subpage) |
+| floors     | jsonb     | YES      | All floor identifiers in the building (property overview) |
+| floors_in_scope   | jsonb     | YES      | Subset of floors the tenant occupies; saved from "Floors in Scope" tile (spaces subpage) |
 | total_area | numeric   | YES      | |
 | created_at | timestamptz | NO    | |
 | updated_at | timestamptz | NO    | |
+
+**Migration (existing DBs):** If `properties` was created before these updates, add columns in SQL Editor: `ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS city text, ADD COLUMN IF NOT EXISTS region text, ADD COLUMN IF NOT EXISTS postcode text, ADD COLUMN IF NOT EXISTS nla text, ADD COLUMN IF NOT EXISTS asset_type text DEFAULT 'Office', ADD COLUMN IF NOT EXISTS year_built integer, ADD COLUMN IF NOT EXISTS last_renovation integer, ADD COLUMN IF NOT EXISTS operational_status text, ADD COLUMN IF NOT EXISTS occupancy_scope text, ADD COLUMN IF NOT EXISTS floors_in_scope jsonb;`
 
 ---
 
 ### 3.5 spaces
 
-Space within a property. References property.
+Space within a property. Can be top-level (parent_space_id null) or a **subspace** (parent_space_id set). Hierarchy: (1) Tenant spaces vs Base building spaces; (2) under each, control (tenant_controlled / landlord_controlled / shared); (3) under any space, subspaces (e.g. "meeting rooms", "common areas"). References property; optional parent for subspaces.
 
 | Column           | Type      | Nullable | Description |
 |-----------------|-----------|----------|-------------|
 | id              | uuid      | NO       | PK |
 | property_id     | uuid      | NO       | FK → properties.id |
+| parent_space_id | uuid      | YES      | FK → spaces.id; null = top-level space |
 | name            | text      | NO       | |
 | space_class     | text      | NO       | `tenant` \| `base_building` |
 | control         | text      | NO       | `landlord_controlled` \| `tenant_controlled` \| `shared` |
-| space_type      | text      | YES      | |
+| space_type      | text      | YES      | e.g. common_area, shared_space, meeting_room, office |
 | area            | numeric   | YES      | |
 | floor_reference | text      | YES      | |
 | in_scope        | boolean   | NO       | Default true |
@@ -144,6 +157,8 @@ Space within a property. References property.
 | gresb_reporting | boolean   | YES      | |
 | created_at      | timestamptz | NO    | |
 | updated_at      | timestamptz | NO    | |
+
+**Migration (existing DBs):** To add subspaces support: `ALTER TABLE public.spaces ADD COLUMN IF NOT EXISTS parent_space_id uuid REFERENCES public.spaces(id) ON DELETE CASCADE;` then `CREATE INDEX IF NOT EXISTS idx_spaces_parent_space_id ON public.spaces(parent_space_id);`
 
 ---
 
