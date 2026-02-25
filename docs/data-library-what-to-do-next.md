@@ -129,6 +129,218 @@ Data Library should respect the global property selector so users can switch bet
 
 ---
 
+### Lovable prompt: Data Library cleanup + dynamic property dropdown (use if mock/localStorage remain)
+
+Use this when **mock data or localStorage are still present** and there is **no dynamic property selector** under My Data. Paste into Lovable so it removes all mock/localStorage and adds a property dropdown that loads from Supabase.
+
+```
+Data Library must use only Supabase — no mock data and no localStorage for records or evidence. Also add a dynamic property selector under My Data.
+
+PART 1 — Remove mock and localStorage
+
+1. Records list: Remove every hardcoded mock array or static data used for Data Library tables (Water, Waste, Certificates, ESG, Indirect Activities, etc.). The only source for table rows must be supabase.from('data_library_records').select('*').eq('account_id', currentAccountId) with optional .eq('property_id', selectedPropertyId) and .eq('subject_category', category). Handle loading and empty state; do not show mock rows.
+
+2. Evidence (drawer): Remove any use of localStorage or useDataLibraryEvidence (or similar) for the Evidence & Attachments panel. The only source for evidence must be supabase.from('evidence_attachments').select('..., documents(...)').eq('data_library_record_id', recordId). Upload must go to Supabase Storage (bucket secure-documents) and insert into documents + evidence_attachments. Delete must remove evidence_attachments row (and optionally the Storage object). No fallback to mock files or local storage.
+
+3. Search the codebase for "mock", "localStorage", "useDataLibraryEvidence", and any Data Library–specific hardcoded arrays; remove or replace with Supabase queries so Data Library is 100% Supabase-backed.
+
+PART 2 — Dynamic property dropdown under My Data
+
+4. Add a property selector dropdown in the Data Library section, under the "My Data" tab (or in the Data Library header so it is visible on all Data Library sub-pages). The dropdown must:
+   - Load the list of properties from Supabase: supabase.from('properties').select('id, name').eq('account_id', currentAccountId).order('name').
+   - Show options: e.g. "All properties" or "Account-level" (value null), plus one option per property (value = property id, label = property name).
+   - When the user selects a property (or "All"), store the selected value in state (e.g. dataLibrarySelectedPropertyId) and refetch data_library_records filtered by that property_id (or show all records for the account if "All").
+   - When creating a new record (Manual Entry), set property_id to the currently selected property from this dropdown (or null if "All" / "Account-level" is selected).
+
+5. Ensure the records list and the create-record form both use this same selected property so that switching the dropdown updates the list and new records are assigned to the selected property.
+```
+
+---
+
+### Lovable prompt: Remove mock data from every Data Library nested page
+
+Use this when **nested pages** (Water, Waste, Certificates, ESG, etc.) still show mock data. Paste into Lovable so **every** Data Library sub-page loads from Supabase with the correct `subject_category` and no hardcoded rows.
+
+```
+Every Data Library nested (category) page must load its table from Supabase only — no mock or hardcoded rows on any of these routes.
+
+Apply this to every page that lists Data Library records:
+
+1. For each route below, the records table must query:
+   supabase.from('data_library_records').select('*').eq('account_id', currentAccountId).eq('subject_category', <category_for_route>)
+   plus .eq('property_id', selectedPropertyId) when a property is selected (or omit filter for "All"). Order by updated_at descending.
+
+2. Route → subject_category mapping (use exactly these values in the query):
+   - /data-library/water        → subject_category: "water"
+   - /data-library/waste        → subject_category: "waste"
+   - /data-library/certificates → subject_category: "certificates"
+   - /data-library/esg          → subject_category: "esg"
+   - /data-library/indirect-activities → subject_category: "indirect_activities"
+   - /data-library/governance   → subject_category: "governance"
+   - /data-library/targets      → subject_category: "targets"
+   - /data-library/occupant-feedback → subject_category: "occupant_feedback"
+   - /data-library/energy       → subject_category: "energy" (if the energy page has a records table; otherwise keep component-based UI but any record list must come from Supabase with subject_category "energy")
+
+3. Remove from each of these pages/components: any hardcoded array of records, any mock rows, any static placeholder data. Replace with the Supabase query above. Show loading state while fetching; show empty state when the query returns zero rows. Do not show mock data as fallback.
+
+4. If a shared component (e.g. DataLibrarySubPage) is used by multiple routes, pass the subject_category as a prop or derive it from the route (e.g. from pathname or route params) so each nested page filters by the correct category. Ensure every instance of that component uses Supabase with the right category — no mock data in the shared component either.
+
+5. Verify: WaterDataPage, WasteDataPage, CertificatesDataPage, ESGDataPage, IndirectActivitiesPage, GovernanceDataPage, TargetsDataPage, OccupantFeedbackList, and any other Data Library category page must all use the same pattern: fetch from data_library_records with account_id + subject_category (+ property_id when selected). No mock data on any nested page.
+```
+
+---
+
+### Lovable prompt: Wire property dropdown to Data Library data (filter list by selected property)
+
+Use this when the **property dropdown exists but switching properties does not change the data** — the same records appear for every property. Paste into Lovable so the selected property actually filters the records on every Data Library page.
+
+```
+The Data Library property dropdown must drive the data: when the user selects a different property, the records list on every Data Library page (Water, Waste, Certificates, ESG, Governance, Targets, etc.) must update to show only records for that property.
+
+1. Single source of truth for "selected property in Data Library": Use one state or context value (e.g. dataLibraryPropertyId or selectedPropertyId) that is set when the user changes the property dropdown in the Data Library section. Every Data Library category page (and the hub if it shows counts) must read this value.
+
+2. Every query for data_library_records must depend on this selected property:
+   - When a property is selected (dropdown value is a property id): add .eq('property_id', selectedPropertyId) to the Supabase query so only records for that property are returned.
+   - When "All" or "Account-level" is selected (dropdown value is null): either .is('property_id', null) to show only account-level records, or omit the property filter to show all records for the account. Be consistent across all pages.
+
+3. Refetch when selection changes: The queries (or hooks) that load data_library_records must have the selected property id in their dependency array (e.g. useEffect or React Query key). When the user changes the dropdown, the selected property state updates and the query runs again with the new property_id filter, so the table shows different data for each property.
+
+4. Apply everywhere: Every nested page that shows a list of Data Library records (Water, Waste, Certificates, ESG, Indirect Activities, Governance, Targets, Energy if it has a record list, etc.) must use the same selected property in its query. No page should ignore the dropdown and show all account records regardless of selection.
+
+5. Manual Entry / Add record: When creating a new record, set property_id to the currently selected property from this dropdown (or null if "All" / "Account-level"). So new records belong to the property the user has selected.
+```
+
+---
+
+### Lovable prompt: Restore Add/Upload buttons and Energy page sections
+
+Use this when **Add Data / Upload buttons were removed** from Data Library pages or when the **Energy page lost its component sections** (Tenant Electricity, Landlord Utilities, Scope 1, Heating, Water). Paste into Lovable to restore them while keeping data from Supabase.
+
+**Live reference (for you when testing):** [Energy page](https://www.securetigre.co.uk/data-library/energy) — check the structure (sections, Add Data dropdown, upload buttons) after each Lovable change. Do not share credentials in the repo; keep them in a secure place.
+
+```
+Data Library must keep the ability to add records and upload files. Restore the following — without re-adding mock data; keep loading records from Supabase.
+
+PART 1 — Add/Upload buttons on every category page
+
+1. On every Data Library category page (Water, Waste, Certificates, ESG, Indirect Activities, Governance, Targets, etc.), ensure there is an "Add Data" dropdown or equivalent with options such as: Upload Documents, Manual Entry, (and optionally Connect Platform, Rule Chain). Users must be able to add records and upload files from each section. Do not remove these actions when wiring Supabase.
+
+2. In the record drawer (when user clicks View on a row), the Evidence & Attachments panel must have an "Upload" (or "Add file") button so users can attach files to that record. Upload should use Supabase Storage + documents + evidence_attachments. Restore this button if it was removed.
+
+3. Each tile/section should have a clear way to add or upload (e.g. "Add record", "Upload invoice", "Manual Entry") so the Data Library remains upload-friendly. Data comes from Supabase; actions to create and upload must remain visible.
+
+PART 2 — Restore Energy page component sections
+
+4. The Energy & Utilities page (/data-library/energy) must not be a single flat table. Restore the multi-section layout:
+
+   - **Page header:** Title "Energy & Utilities", subtitle (e.g. tenant electricity, landlord recharges, heating and water coverage). **Add Data dropdown** with: Upload Tenant Electricity Invoice, Upload Service Charge / Landlord Recharge, Upload Heating Submeter, Upload Water Submeter, Manual Entry.
+
+   - **Component Coverage Summary** (top grid): Rows for Component | Control | Status | Coverage | Latest | Action. Components in this order: (1) Tenant Electricity, (2) Landlord Utilities, (3) Heating, (4) Water. Each row can have an action (e.g. View / Upload). Data for this grid can come from Supabase (e.g. data_library_records with subject_category "energy", aggregated or grouped by component type if you have it) or from a coverage API; if only flat records exist, derive or show placeholders until CoverageEngine exists.
+
+   - **Expandable Component Detail Sections** (below the summary), one section per component:
+     - **Tenant Electricity (Direct — Submetered):** Table with Period, kWh, Cost, Confidence, Evidence, Actions. Upload / Add button in this section.
+     - **Landlord Utilities (Service Charge / Recharge):** Table with Period, Cost, Breakdown Level, Allocation Method, Evidence. Upload / Add button.
+     - **Heating:** Table or message (e.g. "Heating included in landlord recharge" if no separate meter). Upload / Add if applicable.
+     - **Water:** Table with Period, m³, Cost, Source, Confidence, Evidence. Upload / Add button.
+     - **Scope 1 / Direct Emissions** (if you had it): Subsection or tab for stationary combustion, mobile combustion, refrigerants, process emissions — with table and Upload/Add. Restore this section if it was present.
+
+5. Each Energy section should allow uploads or manual entry and show records from Supabase (subject_category "energy"; you can use data_type or a custom field to distinguish Tenant Electricity vs Landlord vs Heating vs Water if needed). Do not replace the section layout with a single undifferentiated table. Keep the component-based structure so users see Tenant Electricity, Landlord Utilities, Heating, Water (and Scope 1) as separate areas with their own tables and add/upload actions.
+```
+
+---
+
+### Lovable prompt: Restore full operational structure (Scope 1 calculators, upload on all pages)
+
+Use this when **other Data Library operational pages** (Water, Waste, Certificates, ESG, Indirect Activities) **lost their upload buttons**, or when the **previous UI structure** (component sections, Scope 1 subsection with calculators and upload) **disappeared** and was replaced by a single flat table or minimal layout.
+
+**Important — do not overwrite the working Energy upload:** If "Upload energy record" / "Upload Tenant Electricity Invoice" already opens a **file upload** (file picker → Storage → documents → records → evidence), leave that behaviour unchanged. This prompt only restores missing structure and buttons; it must **not** route Energy Upload to Manual Entry or replace the file upload flow.
+
+```
+Data Library operational pages must restore the previous structure and actions. Do not leave any operational category as a single undifferentiated table without upload/add.
+
+**Compatibility:** On the Energy page, if "Upload" already opens a file picker and creates records from uploaded files, keep that behaviour. Do not change Upload to open Manual Entry. Only add or restore missing sections (e.g. Scope 1, other operational pages) and their Upload/Add buttons; the Energy Upload action must remain file upload, not form entry.
+
+PART 1 — Upload and Add Data on every operational page
+
+1. On EVERY Data Library category page that holds operational data, ensure there is an "Add Data" dropdown (or equivalent) with at least: **Upload Documents**, **Manual Entry**. Pages to fix: Water (/data-library/water), Waste (/data-library/waste), Certificates (/data-library/certificates), ESG (/data-library/esg), Indirect Activities (/data-library/indirect-activities), and Energy (/data-library/energy). Each must have a visible way to upload files and to add records manually. Wire these to Supabase (data_library_records + documents + evidence_attachments) where applicable; do not remove the buttons when wiring.
+
+2. Each category page should keep (or restore) its previous layout: summary blocks, component/tile sections, tables per component where that was the design. Do not collapse everything into one flat table. Examples:
+   - **Waste:** Summary block (Component | Contracted By | Status | Coverage | Latest), Contractor block (name, contract type, upload: Invoice / Weight report / Diversion certificate), Waste streams breakdown (streams + period table with kg, method, evidence). Upload and Add actions in each relevant block.
+   - **Water:** Component-based or table with Period, m³, Cost, Source, Confidence, Evidence; Upload / Add in the section.
+   - **Certificates, ESG, Indirect Activities:** Table plus Add Data (Upload Documents, Manual Entry) so users can add and attach evidence.
+
+PART 2 — Energy page: restore Scope 1 section with calculators and upload
+
+3. The Energy page (/data-library/energy) must include a dedicated **Scope 1 / Direct Emissions** section (not only Tenant Electricity, Landlord, Heating, Water). Restore it as an expandable subsection or tab with:
+   - **Sub-sections** (or sub-tabs): Stationary combustion (gas, oil, LPG, diesel), Mobile combustion (fleet), Refrigerants (fugitive emissions), Process emissions (if applicable). Each sub-section has: a table of records (period, quantity, unit, source, evidence, actions) and **Upload** + **Add** / Manual entry.
+
+4. **Scope 1 calculators:** Where the previous UI had calculator-style inputs (e.g. enter fuel type + quantity in kWh, or refrigerant type + kg to derive or store activity data / estimated tCO₂e), restore those. For example:
+   - Stationary combustion: form or inline calculator for fuel type (gas, oil, LPG, etc.), quantity (kWh or volume), period; optional display of estimated emissions (quantity × factor) if you have factors.
+   - Refrigerants: form or calculator for refrigerant type (e.g. R410A, R134a), quantity (kg), GWP if needed; store as activity record and optionally show estimated tCO₂e.
+   - Mobile / Process: similar data-entry or calculator UIs if they existed.
+   So Scope 1 has both (a) **upload** of invoices/records and (b) **manual/data entry or calculators** for direct input of quantities. Restore both; do not remove the calculators in favour of upload-only.
+
+5. After restoration, Energy page structure should be: Page header + Add Data dropdown → Component Coverage Summary (Tenant Electricity, Landlord Utilities, Heating, Water, Scope 1) → Expandable detail sections for each, with **Scope 1** containing sub-areas (stationary, mobile, refrigerants, process), each with table + Upload + Add/Calculator as above. Data from Supabase (subject_category "energy"; use a field or data_type to distinguish Scope 1 sub-types if needed). No single flat table replacing this component layout.
+```
+
+---
+
+### Lovable prompt: Upload energy record = file upload (not Manual Entry)
+
+Use this when **"Upload energy record"** or **"Upload Tenant Electricity Invoice"** (or similar) opens **Manual Entry** instead of a **file upload**. The user must be able to select one or more PDFs (e.g. 5 energy bills) and have them uploaded and stored as records with attached evidence.
+
+```
+"Upload energy record" and the other Energy upload options (Upload Tenant Electricity Invoice, Upload Service Charge / Landlord Recharge, Upload Heating Submeter, Upload Water Submeter) must open a FILE UPLOAD flow, not the Manual Entry form.
+
+1. When the user clicks "Upload energy record" or "Upload Tenant Electricity Invoice" (or "Upload Documents" in the Energy section), open a file picker dialog that:
+   - Accepts PDF files (and optionally images, Excel, CSV per your validation rules).
+   - Allows MULTIPLE file selection so the user can add several bills at once (e.g. 5 PDFs).
+   - Validates file type and size (e.g. max 10 MB per file) before uploading.
+
+2. For each selected file, in order:
+   - Upload the file to Supabase Storage (bucket secure-documents), path: account/{accountId}/property/{propertyId}/{year}/{month}/{docId}-{fileName}.
+   - Insert a row into `documents` (account_id, storage_path, file_name, mime_type, file_size_bytes).
+   - Insert a row into `data_library_records` with: account_id, property_id (current selected property or null), subject_category "energy", source_type "upload", name (e.g. the file name without extension, or "Energy bill - [filename]"), and optionally reporting_period_start/end if you can derive or leave null.
+   - Insert a row into `evidence_attachments` linking that record to that document (data_library_record_id, document_id), with optional tag "invoice".
+
+3. So if the user selects 5 PDFs, create 5 records (each with one attached bill). After upload, refetch the records list so the new rows appear in the Energy table. Show a success message (e.g. "5 files uploaded").
+
+4. Keep "Manual Entry" as a SEPARATE action: it opens the form for entering record details by hand (no file). Do not route "Upload" or "Upload energy record" to Manual Entry. Upload = file picker → upload files → create records + documents + evidence. Manual Entry = form → insert record only.
+```
+
+---
+
+## Extracting data from energy PDFs
+
+**Current behaviour:** Upload stores the PDF in Storage, creates a `documents` row, creates a `data_library_record` (with `name` e.g. from filename, `subject_category` "energy", `source_type` "upload"), and links them via `evidence_attachments`. No automatic extraction of period, kWh, or cost from the PDF yet — those can be added via **Manual Entry** (edit the record) or in a future extraction step.
+
+**Ways to get data from PDFs:**
+
+1. **Manual entry (today)** — After uploading, open the record in the drawer and use Edit / Manual Entry to fill reporting period, quantity (kWh), unit, cost, confidence. The record already has `value_numeric`, `unit`, `reporting_period_start`, `reporting_period_end` in the schema.
+2. **Sample payload for one property (recommended next step)** — Define the target shape for “one energy bill as data” so that when you add extraction (or a human creates a sample), the app and backend know what to store. You can create a sample as JSON or as one row in Supabase and we document it; see below.
+3. **Future: PDF extraction** — Options include: (a) OCR + parsing (e.g. extract text, then regex or rules for period, kWh, £), (b) an external document-intelligence API, or (c) an AI/agent step that reads the PDF and returns structured fields. The backend can expose an endpoint or Edge Function that accepts a document ID, runs extraction, and updates the corresponding `data_library_record` with the extracted fields.
+
+**Target schema for one energy bill (for sample or extraction):**
+
+The `data_library_records` table already supports the needed fields. For one electricity/gas bill, the target shape is:
+
+| Field | Example | Notes |
+|-------|--------|--------|
+| name | "Electricity Jan 2026" or from filename | Display name |
+| subject_category | "energy" | |
+| source_type | "upload" (or "manual" if entered by hand) | |
+| reporting_period_start | 2026-01-01 | Bill period start |
+| reporting_period_end | 2026-01-31 | Bill period end |
+| value_numeric | 1250.5 | Consumption (kWh) or cost |
+| unit | "kWh" or "GBP" | |
+| data_type | "tenant_electricity" / "gas" / "landlord_recharge" etc. | Optional; distinguishes component |
+| confidence | "measured" / "allocated" / "estimated" / "cost_only" | |
+| value_text | Meter number, MPAN, supplier name | Optional; free text |
+
+**Creating a sample for one property:** You can either (1) provide a sample PDF and we document which fields to extract for that format (e.g. “period from this line, kWh from this table”), or (2) create one sample record manually (in the app or in Supabase) with the above fields filled for one bill, and we add that as a “sample payload” doc (e.g. `docs/data-library-energy-bill-sample-payload.md`) so Lovable or a future extraction service has a concrete target. If PDF parsing is too heavy for now, the sample payload approach is enough to align the UI and API on the shape of one extracted bill.
+
+---
+
 ## Lovable changes to Supabase (when it implemented 2.5–2.6)
 
 When Lovable wired evidence upload, it may have applied migrations or policies in your Supabase project. For the backend repo to stay in sync:
@@ -149,6 +361,8 @@ Use this checklist to confirm everything is correct.
 1. **List (2.3)** — Open a Data Library category (e.g. Waste, Water). The table should show rows. If you have no rows yet, the table is empty (not mock rows with fake names).
 2. **Create (2.4)** — Use Manual Entry / Add record. Fill name, category, confidence, period; submit. The new row appears in the table.
 3. **Evidence (2.5 + 2.6)** — Click **View** on that row to open the drawer. In Evidence & Attachments, click **Upload**, choose a file (e.g. PDF), optionally tag; upload. The file appears in the list in the drawer. Optional: use Download if implemented.
+4. **Upload energy record (file upload)** — On the Energy page, click **Upload energy record** or **Upload Tenant Electricity Invoice**. A file picker should open (not the Manual Entry form). Select 5 energy bill PDFs; upload. You should see 5 new rows in the Energy table and in Supabase (`data_library_records` + `documents` + `evidence_attachments`). Manual Entry remains a separate action.
+5. **Other operational pages + Scope 1** — Open Water, Waste, Certificates, ESG, Indirect Activities: each should have an Add Data dropdown with Upload and Manual Entry, and their previous structure (e.g. Waste: summary + contractor + streams; not a single bare table). On Energy, the Scope 1 / Direct Emissions section should be present with sub-areas (stationary, mobile, refrigerants, process), each with table + Upload + Add, and calculator-style inputs (e.g. fuel/refrigerant quantity entry) where restored.
 
 **In Supabase (source of truth)**
 
