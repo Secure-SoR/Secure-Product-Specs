@@ -242,15 +242,16 @@ Data Library record (utility, evidence, governance, etc.). Evidence linked via `
 | id                     | uuid      | NO       | PK |
 | account_id             | uuid      | NO       | FK → accounts.id |
 | property_id            | uuid      | YES      | FK → properties.id (nullable for account-level) |
-| subject_category       | text      | NO       | e.g. scope2, waste, policy |
+| subject_category       | text      | NO       | e.g. energy, waste, certificates, governance, targets (see data-library-implementation-context) |
+| name                   | text      | YES      | Display name for UI ("Record Name") |
 | data_type              | text      | YES      | |
 | value_numeric          | numeric   | YES      | |
 | value_text             | text      | YES      | |
 | unit                   | text      | YES      | |
 | reporting_period_start | date      | YES      | |
 | reporting_period_end   | date      | YES      | |
-| source_type            | text      | NO       | `connector` \| `upload` \| `manual` |
-| confidence              | text      | YES      | measured \| allocated \| estimated |
+| source_type            | text      | NO       | `connector` \| `upload` \| `manual` \| `rule_chain` |
+| confidence              | text      | YES      | measured \| allocated \| estimated \| cost_only |
 | allocation_method      | text      | YES      | |
 | allocation_notes       | text      | YES      | |
 | created_at             | timestamptz | NO    | |
@@ -279,13 +280,15 @@ Storage path format (invariant): `account/{accountId}/property/{propertyId}/{yyy
 
 ### 3.11 evidence_attachments
 
-Links a Data Library record to a document. Many-to-many possible (one record, many docs).
+Links a Data Library record to a document. Many-to-many possible (one record, many docs). Optional columns for Lovable Evidence panel: tag (invoice, contract, methodology, certificate, report, other), description — see [add-evidence-attachment-tag-and-description.sql](migrations/add-evidence-attachment-tag-and-description.sql).
 
 | Column                 | Type      | Nullable | Description |
 |------------------------|-----------|----------|-------------|
 | id                     | uuid      | NO       | PK |
 | data_library_record_id | uuid      | NO       | FK → data_library_records.id |
 | document_id            | uuid      | NO       | FK → documents.id |
+| tag                    | text      | YES      | Optional: invoice, contract, methodology, certificate, report, other |
+| description            | text      | YES      | Optional description for this attachment |
 | created_at             | timestamptz | NO    | |
 
 Unique on `(data_library_record_id, document_id)`.

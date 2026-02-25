@@ -25,8 +25,9 @@ When you move on to the **AI agent** project, use this list to keep the agent in
 
 ## Data library and evidence (when Phase 3 is done)
 
-- [ ] **dataLibraryRecords / evidence:** If the agent uses these, ensure field names match what Lovable sends (see implementation plan Phase 5). Handle optional or empty arrays.
+- [ ] **dataLibraryRecords / evidence:** If the agent uses these, ensure field names match what Lovable sends (see implementation plan Phase 5). Handle optional or empty arrays. Records have **subject_category** (energy, water, waste, indirect_activities, certificates, esg, governance, targets, occupant_feedback); **emissions are never stored as Data Library records** — they are derived (Emissions Engine).
 - [ ] **Building systems context:** Systems in context follow the Building Systems Taxonomy (categories + types). Optional fields per system: keySpecs, specStatus, servesSpacesDescription (from register). Context shape already has systems array; ensure agent can use category/type and optional register fields if sent.
+- [ ] **Coverage (optional):** If the agent later receives KPI coverage (Complete/Partial/Unknown), it will align with `docs/sources/Secure_KPI_Coverage_Logic_Spec_v1.md` (component states, utilityComponentProfile, kpiAssessments). No change to context shape until dashboards and CoverageEngine are wired.
 
 ---
 
@@ -38,4 +39,4 @@ When you move on to the **AI agent** project, use this list to keep the agent in
 
 ---
 
-*Last sync: Backend has property fields (occupancy_scope, floors_in_scope); spaces have parent_space_id; systems + upload register working (DB triggers normalize controlled_by, allocation_method, metering_status). **Next:** (1) Create the Nodes part (end_use_nodes, Phase 4), (2) Data Library (Phase 3), (3) Ensure Scope 1/2/3 calculation is correct, (4) then move on to agent (Phase 5). Context shape includes optional floorsInScope, spaces with parentSpaceId/children, systems with optional register fields. Update this file when you add tasks or complete them.*
+*Last sync: Backend has property fields (occupancy_scope, floors_in_scope); spaces have parent_space_id; systems + upload register working; end_use_nodes (Phase 4) and nodes spec/prompts in place. **Data Library:** Taxonomy v3, Energy/Waste component architecture, Emissions (Calculated) handoff, Emissions Engine mapping + schema draft, KPI Coverage spec, step-by-step for dynamic Lovable+Supabase; for-agent README and tasks updated with subject_category, no-emissions-as-records, optional coverage. **Next:** (1) Execute Data Library step-by-step (dynamic UI + Storage), (2) Dashboards + KPI coverage (CoverageEngine), (3) Emissions Engine backend when needed, (4) Agent Phase 5. Context shape: floorsInScope, spaces with parentSpaceId/children, systems, dataLibraryRecords (subject_category), evidence; optional coverage later. Update this file when you add tasks or complete them.*

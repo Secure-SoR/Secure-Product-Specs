@@ -1,6 +1,127 @@
 # Data Library — What the backend has and what we need from Lovable
 
-Use this before implementing the backend/upload for the Data Library: it summarises what exists in the repo and what we need from you (Lovable UI and logic) so the implementation matches.
+Use this before implementing the backend/upload for the Data Library: it summarises what exists in the repo, the **Lovable Data Library structure** (tiles, routes, record model), and the mapping to backend schema and upload flow.
+
+---
+
+## Lovable Data Library structure (reference)
+
+Reference docs:
+
+- **[Secure_Data_Library_Taxonomy_v3_Activity_Emissions_Model.md](sources/Secure_Data_Library_Taxonomy_v3_Activity_Emissions_Model.md)** — **Canonical taxonomy:** four layers (Activity, Emissions, Governance & Strategy, Compliance & Disclosure), scope-as-classification principle, access control IDs, reporting rules, migration notes. Use for alignment of tiles, routes, and backend.
+- **[lovable-data-library-context.md](sources/lovable-data-library-context.md)** — Lovable Cursor-ready overview: tiles, routes, record model, engines, 140A, non-goals.
+- **[lovable-data-library-spec.md](sources/lovable-data-library-spec.md)** — Lovable detailed spec: where it appears, screens/flows, route map, record creation by category, evidence (record-first + tags), categories, filtering, current limitations.
+- **[data-library-routes-and-responsibilities.md](data-library-routes-and-responsibilities.md)** — Backend view: each route, subject responsibilities, per-component fields (energy), and engine pipeline (Activity → Coverage → Emissions → Controllability → Dashboards).
+- **[Secure_DataLibrary_Energy_Waste_Component_Architecture_v1.md](sources/Secure_DataLibrary_Energy_Waste_Component_Architecture_v1.md)** — **Energy & Waste page design (v1):** component-based architecture for `/data-library/energy` and `/data-library/waste`; coverage summary grid, component detail sections (Tenant Electricity, Landlord Utilities, Heating, Water; Waste streams, Contractor); status enums, upload auto-tagging, space awareness, data gaps panel; aligns with CoverageEngine and EmissionsEngine. Use for UI implementation and upload flows.
+- **[Secure_Emissions_Calculated_Page_Engineering_Handoff_v1.md](sources/Secure_Emissions_Calculated_Page_Engineering_Handoff_v1.md)** — **Emissions (Calculated) page (Layer 2, read-only):** React component hierarchy + state logic for `/data-library/scope-data`; data contracts (ScopeSummary, CalculationMeta, EmissionsLineItem, EmissionsPageVM), component tree (ScopeSummaryCard, CalculationMetaStrip, ScopeBreakdownAccordion, TraceabilityDrawer), state/selectors, read-only rules, empty states, styling (Scope 1=amber, 2=green, 3=blue). MVP: mock VM; later: Emissions Engine API.
+- **[Secure_Emissions_Engine_Mapping_v1.md](sources/Secure_Emissions_Engine_Mapping_v1.md)** — **Emissions Engine logic (Activity → Scope):** mapping matrix v1 — philosophy (never store emissions as primary; derive from activity; deterministic scope; factor by methodology+version; confidence). Activity→Scope tables (Energy & Utilities, Waste & Recycling, Indirect Activities); factor resolution; calculation formula; scope aggregation; confidence scoring; factor versioning; 140 Aldersgate example. Use for engine implementation and for aligning Emissions (Calculated) UI with classification rules.
+- **[Secure_Emissions_Engine_Schema_Draft_v1.md](sources/Secure_Emissions_Engine_Schema_Draft_v1.md)** — **Emissions Engine DB draft:** tables for emission_factor_sets, emission_calculation_runs, emission_line_items; factor versioning and recalculation; mapping to EmissionsPageVM; optional note on CoverageEngine persistence.
+- **[Secure_KPI_Coverage_Logic_Spec_v1.md](sources/Secure_KPI_Coverage_Logic_Spec_v1.md)** — **CoverageEngine (KPI completeness):** Complete / Partial / Unknown from component state; utility component profile (per property, per period); inference rules (tenant electricity, service charge, heating, water, waste); KPI requirement mapping; pseudocode for `CoverageEngine.evaluate()`; dashboard tooltips; schema draft for coverage_assessments.
+
+Summary from both:
+
+- **Location:** Top-level sidebar at `/data-library`; gated by auth and `data_library` module flag. Property selector filters context (cross-portfolio view).
+- **Hub:** Three tabs — My Data (tile grid), Shared Data (table), Connectors (grid). "Add Data" dropdown: Connect Platform, Upload Documents, Manual Entry, Rule Chain.
+- **Subpages:** Generic table pattern (Water, Waste, Certificates, ESG, Indirect Activities) or custom (Energy, Scope data, Governance, Targets, Occupant Feedback). Table columns: Record Name, Ingestion Method, Confidence, Linked Report, Last Updated, Actions. **View** → drawer with Evidence & Attachments panel (upload + tags), Audit History.
+- **Record creation:** No universal form — Governance (dialog: category, title, status, responsible person), Targets (dialog: category, scope, baseline/target, unit, status), others currently mock/stub.
+- **Evidence:** Record-first, then attach files. One record → many files. Upload dialog: file (PDF/Excel/CSV/Images, max 10MB), **tag** (invoice, contract, methodology, certificate, report, other), optional description. Evidence is currently localStorage; backend will use Storage + `documents` + `evidence_attachments`.
+- **Emissions:** Read-only calculated at `/data-library/scope-data` — never stored as primary records.
+
+---
+
+## Alignment with Data Library Taxonomy v3
+
+The **[Data Library Taxonomy v3](sources/Secure_Data_Library_Taxonomy_v3_Activity_Emissions_Model.md)** is the source of truth for layers and access control. Summary:
+
+| Layer | Content | Routes / tiles | Storage |
+|-------|--------|----------------|---------|
+| **Layer 1 — Activity** | Energy & Utilities, Waste & Recycling, **Indirect Activities** | `/energy`, `/waste`, `/water`, `/indirect-activities` | `data_library_records` (evidence-backed, editable, property-scoped) |
+| **Layer 2 — Emissions** | Emissions (Calculated) — scope breakdown, factor source, methodology | `/scope-data` only | **Read-only**; no manual records. Output of Emissions Engine from Activity + Waste + Indirect. |
+| **Layer 3 — Governance & Strategy** | Governance & Accountability, Targets & Commitments | `/governance`, `/targets` | `data_library_records` (subject_category governance / targets) |
+| **Layer 4 — Compliance & Disclosure** | ESG Disclosures (document archive), Certificates | `/esg`, `/certificates` | `data_library_records` + evidence; disclosures = document storage only |
+
+**Principle:** Scope is a **classification outcome**, not a primary data category. Reports pull from Activity and Emissions Engine; they must not store emissions or duplicate datasets.
+
+**Access control (Lovable):** Use these **access IDs** for per-tile permissions (from Taxonomy v3 §7). Ensure the **targets** page uses `targets`, not `esg_governance`.
+
+| Tile | Access ID |
+|------|-----------|
+| Energy & Utilities | `energy_utilities` |
+| Waste & Recycling | `waste` |
+| Indirect Activities | `indirect_activities` |
+| Emissions (Calculated) | `scope_123` (read-only) |
+| Governance & Accountability | `governance` |
+| Targets & Commitments | `targets` |
+| ESG Disclosures | `esg` |
+| Certificates | `certificates` |
+
+---
+
+## Lovable → Backend mapping
+
+| Lovable concept | Backend (current) | Action |
+|-----------------|-------------------|--------|
+| **Record Name** | No column | Add `name` (or `title`) to `data_library_records` — see [migration](database/migrations/add-data-library-record-name-and-enums.sql). |
+| **Ingestion Method** | `source_type`: connector, upload, manual | Extend to allow `rule_chain` (Lovable “Rule Chain” in Add Data). |
+| **Confidence** | measured, allocated, estimated | Extend to allow `cost_only` (Energy: “Cost Only” for landlord recharge). |
+| **Subject / category** | `subject_category` (text) | Use canonical list below for UI and validation; no DB enum required. |
+| **Period** | `reporting_period_start`, `reporting_period_end` | Already aligned. |
+| **Evidence** | `documents` + `evidence_attachments` | One record, many files. Lovable upload has **tag** (invoice, contract, methodology, certificate, report, other) and **description** — add optional `tag`, `description` on `evidence_attachments` if UI needs them stored (see [optional migration](database/migrations/add-evidence-attachment-tag-and-description.sql)). |
+| **Audit** | `audit_events` (entity_type = `data_library_records`) | Use for record create/update and evidence attach. |
+| **Linked Report** | — | Not in schema; optional/future. |
+
+### Canonical subject categories (aligned with Taxonomy v3 + Lovable)
+
+Use these for dropdowns, filters, and agent context. **Emissions (scope-data)** is Layer 2 — calculated only; do not store as a record category.
+
+| Tile ID / route | Suggested `subject_category` |
+|-----------------|------------------------------|
+| energy | `energy` |
+| water | `water` |
+| waste | `waste` |
+| indirect-activities | `indirect_activities` |
+| certificates | `certificates` |
+| esg | `esg` |
+| governance | `governance` |
+| targets | `targets` |
+| occupant-feedback | `occupant_feedback` |
+
+Evidence record types (Lovable) map to same categories: `energy`, `scope1`, `scope2`, `scope3`, `waste`, `water`, `governance`, `target`, `certificate`, `policy`, `general`.
+
+---
+
+## Upload flow (backend)
+
+1. **Create record:** `INSERT INTO data_library_records` with `account_id`, `property_id` (or null), `subject_category`, `source_type`, `confidence`, `name` (if present), `reporting_period_start`/`_end`, etc.
+2. **Upload file to Storage:** bucket `secure-documents`, path `account/{accountId}/property/{propertyId}/{yyyy}/{mm}/{documentId}-{fileName}` (or `account/{accountId}/account-level/{yyyy}/{mm}/...` if no property).
+3. **Register document:** `INSERT INTO documents` with `account_id`, `storage_path`, `file_name`, `mime_type`, `file_size_bytes`.
+4. **Attach to record:** `INSERT INTO evidence_attachments` (`data_library_record_id`, `document_id`).
+5. **Audit:** Insert into `audit_events` for record create/update and (optionally) for evidence attach (entity_type `data_library_records` or a dedicated evidence action).
+
+**Flow choice:** Lovable pattern is “record first, then attach file(s)” in the Evidence panel; the backend supports multiple files per record via `evidence_attachments`.
+
+### Limitations from Lovable spec (what to build)
+
+From [lovable-data-library-spec.md §7](sources/lovable-data-library-spec.md): (1) Most record data is hardcoded mock — wire generic and Energy categories to Supabase. (2) Evidence is localStorage-only — implement Storage + documents + evidence_attachments. (3) "Add Data" actions are stubs — connect Upload Documents / Manual Entry to create record + upload flow. (4) No per-property scoping — backend has `property_id`; list/filter by selected property when Lovable is ready. (5) No reporting period filter — backend has `reporting_period_start`/`_end`; add date range filter on sub-pages. (6) Scope data is hardcoded — emissions remain calculated elsewhere; do not store as Data Library records.
+
+---
+
+## Prompt to paste into Lovable (get a description of the Data Library)
+
+Paste this into Lovable so it describes what the Data Library section currently has. Then copy Lovable’s reply and share it (e.g. paste here or into this doc) so we can align the backend.
+
+```
+Please describe the Data Library section in this app in detail so we can document it for the backend team. Include:
+
+1. Where Data Library appears in the app (navigation: top-level, under a property, under Reporting, etc.).
+2. What screens or flows exist (e.g. list of records, create record, upload file, attach evidence).
+3. For creating or editing a "data library record": what fields does the user see and fill in? (e.g. name/title, category, reporting period, confidence, source type, allocation method, etc.)
+4. How files are added: does the user create a record first and then attach a file, or upload a file first and then link it to a record? Can one record have multiple files?
+5. What categories or types are used for records (e.g. scope2, waste, policy, energy & utilities).
+6. How the list of records is shown and filtered (by property, by category, by year, etc.).
+
+Reply in a clear, structured way (numbered or with headings) so we can use it as a spec.
+```
 
 ---
 
@@ -8,12 +129,11 @@ Use this before implementing the backend/upload for the Data Library: it summari
 
 ### Schema (Supabase)
 
-- **data_library_records:** id, account_id, property_id (nullable), subject_category, data_type, value_numeric, value_text, unit, reporting_period_start, reporting_period_end, source_type (connector | upload | manual), confidence (measured | allocated | estimated), allocation_method, allocation_notes, created_at, updated_at.  
-  **No `name` column** — records are identified by category + period (and optional value); if the UI shows a "record name", we may need to add a `name` or `title` field, or derive display label in the app.
+- **data_library_records:** id, account_id, property_id (nullable), subject_category, **name** (optional), data_type, value_numeric, value_text, unit, reporting_period_start, reporting_period_end, source_type (connector | upload | manual | rule_chain), confidence (measured | allocated | estimated | cost_only), allocation_method, allocation_notes, created_at, updated_at. See [migration](database/migrations/add-data-library-record-name-and-enums.sql).
 
 - **documents:** id, account_id, storage_path, file_name, mime_type, file_size_bytes, created_at, updated_at. Metadata only; the file binary lives in **Supabase Storage** (bucket `secure-documents`).
 
-- **evidence_attachments:** id, data_library_record_id, document_id, created_at. Links a record to a document. One record can have many documents; one document can be attached to one record (or we treat it as one record per attachment; schema allows many-to-many).
+- **evidence_attachments:** id, data_library_record_id, document_id, created_at. Optional: **tag**, **description** for Evidence panel (invoice, contract, methodology, etc.) — [add-evidence-attachment-tag-and-description.sql](database/migrations/add-evidence-attachment-tag-and-description.sql). One record can have many documents.
 
 ### Flow (from implementation plan Phase 3)
 
@@ -29,10 +149,12 @@ Use this before implementing the backend/upload for the Data Library: it summari
 - [implementation-plan Phase 3](implementation-plan-lovable-supabase-agent.md) — Data library records + file uploads (high-level steps).
 - [bills-register.md](sources/140-aldersgate/bills-register.md) — example mapping (Data Library Category, Confidence, Allocation Method, etc.).
 
-### Gaps in the schema (to confirm with you)
+### Schema changes applied (from Lovable alignment)
 
-- **Record name/title:** The table has no `name` or `title`. If the UI shows "Electricity Jan 2026" or "Sustainability policy", that is either derived (e.g. category + period) or we should add a `name` column.
-- **Subject categories:** The plan mentions scope2, scope3, waste, policy; bills-register uses "Energy & Utilities", "Waste". We need a single list of allowed or suggested **subject_category** values for the UI and for validation (and optionally an enum or check in DB).
+- **Record name:** Added `name text` to `data_library_records` (nullable). Use for "Record Name" in the table/drawer. Migration: [add-data-library-record-name-and-enums.sql](database/migrations/add-data-library-record-name-and-enums.sql).
+- **source_type:** Extended to allow `rule_chain` (in addition to connector, upload, manual).
+- **confidence:** Extended to allow `cost_only` (in addition to measured, allocated, estimated).
+- **Subject categories:** Canonical list is in the [Lovable → Backend mapping](#lovable--backend-mapping) table above; use for UI and validation (no DB enum).
 
 ---
 
@@ -78,10 +200,11 @@ To implement the backend/upload so it matches the product, please share or confi
 
 ## 3. What we’ll produce once we have the above
 
-- **Schema changes** (if any): e.g. add `name` to data_library_records; optional enum or check for subject_category.
-- **Storage:** Bucket and RLS (or SQL snippets) for `secure-documents` with path rules.
-- **Upload flow (backend side):** Exact steps and field mapping (create record → upload file → insert document → insert evidence_attachment).
-- **Lovable prompts** for Data Library: create record, upload file, attach to record, list records with evidence (so you can paste into Lovable and get UI that matches the backend).
+- **Schema:** Migration [add-data-library-record-name-and-enums.sql](database/migrations/add-data-library-record-name-and-enums.sql) adds `name` and extends `source_type` and `confidence` checks.
+- **Storage:** Bucket `secure-documents`; path format in [schema.md §3.10](database/schema.md). RLS: implementation plan Phase 3; path under `account/{accountId}/...`.
+- **Upload flow:** See [Upload flow (backend)](#upload-flow-backend) above.
+- **Lovable reference:** Full structure in [lovable-data-library-context.md](sources/lovable-data-library-context.md). Use for Cursor project instructions or prompts so backend and UI stay aligned.
+- **Step-by-step (Lovable + Supabase):** [data-library-lovable-supabase-step-by-step.md](data-library-lovable-supabase-step-by-step.md) — make the UI dynamic: run migrations, Storage, replace mock list, create record, upload evidence, evidence panel, property scoping, optional filters.
 
 ---
 

@@ -22,9 +22,9 @@ The **AI agent** (Data Readiness / Boundary) lives in a **separate project** (e.
 
 ## Phase 3: Data library + evidence in Supabase
 
-**Backend / Lovable:** Data library records in `data_library_records`; files in Storage bucket `secure-documents`; links in `documents` and `evidence_attachments`.
+**Backend / Lovable:** Data library records in `data_library_records` (with `name`, `subject_category`, `source_type` connector|upload|manual|rule_chain, `confidence` including cost_only; canonical categories: energy, water, waste, indirect_activities, certificates, esg, governance, targets, occupant_feedback). Files in Storage bucket `secure-documents`; links in `documents` and `evidence_attachments` (optional `tag`, `description`). **Emissions are never stored as primary data** — they are calculated (Layer 2); Data Library is Activity + Governance + Compliance only. Step-by-step to make UI dynamic: `docs/data-library-lovable-supabase-step-by-step.md`. Key specs: Taxonomy v3 (`docs/sources/Secure_Data_Library_Taxonomy_v3_Activity_Emissions_Model.md`), Energy/Waste component architecture (`docs/sources/Secure_DataLibrary_Energy_Waste_Component_Architecture_v1.md`), Emissions Engine mapping (`docs/sources/Secure_Emissions_Engine_Mapping_v1.md`), KPI Coverage (`docs/sources/Secure_KPI_Coverage_Logic_Spec_v1.md`).
 
-**Agent:** Context may include `dataLibraryRecords` and `evidence` (record id, type, name, file name). No change to agent input shape if it already accepts these; ensure field names match what Lovable will send (see implementation plan Phase 5 “Agent context shape”).
+**Agent:** Context may include `dataLibraryRecords` and `evidence` (record id, type, name, file name, subject_category). Use **subject_category** to reason about activity layer (energy, waste, etc.); do not expect emissions as records. If the agent ever receives **coverage** (Complete/Partial/Unknown per KPI), it will come from CoverageEngine output (utilityComponentProfile, kpiAssessments); see KPI Coverage spec. Ensure field names match what Lovable sends (implementation plan Phase 5 “Agent context shape”).
 
 ---
 
@@ -41,3 +41,4 @@ The **AI agent** (Data Readiness / Boundary) lives in a **separate project** (e.
 - [ ] Context input schema matches `docs/implementation-plan-lovable-supabase-agent.md` Phase 5 “Agent context shape”.
 - [ ] Property/spaces/systems IDs: agent accepts UUIDs (from Supabase) or string ids; document which the agent expects.
 - [ ] API endpoint and request/response contract are documented (e.g. in agent repo `AGENT-SUMMARY.md` or API docs) so Lovable can call the agent correctly.
+- [ ] Data library: agent expects `dataLibraryRecords` with `subject_category` (energy, waste, etc.); does not treat emissions as stored records. If coverage is added to context later, it follows `docs/sources/Secure_KPI_Coverage_Logic_Spec_v1.md`.

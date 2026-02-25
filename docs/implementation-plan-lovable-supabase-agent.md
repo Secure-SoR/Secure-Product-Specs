@@ -500,6 +500,8 @@ On the Physical and Technical (building systems) page, add an "Upload register" 
 
 **Why:** So the agent has data library records and evidence (e.g. bills, governance docs) to reason over.
 
+**Data Library structure (Lovable):** Canonical taxonomy: [Secure_Data_Library_Taxonomy_v3_Activity_Emissions_Model.md](../sources/Secure_Data_Library_Taxonomy_v3_Activity_Emissions_Model.md) (four layers, access IDs, reporting rules). [data-library-implementation-context.md](../data-library-implementation-context.md) maps Lovable to backend; [sources/lovable-data-library-context.md](../sources/lovable-data-library-context.md) (overview) and [sources/lovable-data-library-spec.md](../sources/lovable-data-library-spec.md) (detailed spec: routes, record creation by category, evidence tags, limitations). Use canonical `subject_category`: energy, water, waste, indirect_activities, certificates, esg, governance, targets, occupant_feedback. Records: optional `name`; `source_type`: connector | upload | manual | rule_chain; `confidence`: measured | allocated | estimated | cost_only. Evidence: optional `tag` and `description` on evidence_attachments (migration in docs). Run [add-data-library-record-name-and-enums.sql](../database/migrations/add-data-library-record-name-and-enums.sql) if not already applied.
+
 ### Supabase
 
 1. **Storage RLS (bucket `secure-documents`):** Allow authenticated users to upload/list/read in paths scoped by their account. Example policy (run in SQL Editor):
@@ -526,8 +528,8 @@ On the Physical and Technical (building systems) page, add an "Upload register" 
 ### Lovable
 
 1. **Data library records**
-   - **Create:** `supabase.from('data_library_records').insert({ account_id: currentAccountId, property_id: propertyIdOrNull, subject_category, source_type, confidence, value_numeric or value_text, unit, reporting_period_start, reporting_period_end })`. `subject_category`: e.g. scope2, scope3, waste, policy. `source_type`: connector | upload | manual.
-   - **List:** `supabase.from('data_library_records').select('*').eq('account_id', currentAccountId)` (and optionally filter by `property_id`).
+   - **Create:** `supabase.from('data_library_records').insert({ account_id: currentAccountId, property_id: propertyIdOrNull, subject_category, name (optional), source_type, confidence, value_numeric or value_text, unit, reporting_period_start, reporting_period_end })`. `subject_category`: use canonical list (energy, waste, certificates, esg, governance, targets, occupant_feedback). `source_type`: connector | upload | manual | rule_chain. `confidence`: measured | allocated | estimated | cost_only.
+   - **List:** `supabase.from('data_library_records').select('*').eq('account_id', currentAccountId)` (and optionally filter by `property_id`, subject_category).
 2. **Upload a file (e.g. bill or governance doc)**
    - Build storage path: e.g. `account/${currentAccountId}/property/${propertyId}/${year}/${month}/${uuid()}-${fileName}` (align with [architecture invariant](architecture/architecture.md)).
    - Upload file: `supabase.storage.from('secure-documents').upload(path, file, { upsert: false })`.
@@ -536,6 +538,10 @@ On the Physical and Technical (building systems) page, add an "Upload register" 
 3. **List records with evidence:** Query `data_library_records` and join or query `evidence_attachments` and `documents` to show attached files. For agent context, you only need record metadata + document IDs or paths; the agent can receive signed URLs if it needs to read files (optional).
 
 **Done when:** You can create a data library record (e.g. “Electricity Jan 2026”, “Sustainability policy”), upload a PDF, attach it to the record, and see rows in `data_library_records`, `documents`, and `evidence_attachments`.
+
+**Step-by-step guide (Lovable):** [data-library-lovable-supabase-step-by-step.md](../data-library-lovable-supabase-step-by-step.md) — ordered steps to make the Data Library UI dynamic: migrations, Storage bucket, replace mock list, create record, upload + attach evidence, evidence panel, property scoping, optional period filter, Governance/Targets.
+
+**What to do next (order of work):** [data-library-what-to-do-next.md](../data-library-what-to-do-next.md) — confirms for-agent is updated; ordered Data Library steps (2.1–2.10); then move to **Dashboards (KPI coverage)**; quick reference to all key Data Library / Emissions / Coverage docs.
 
 ---
 
