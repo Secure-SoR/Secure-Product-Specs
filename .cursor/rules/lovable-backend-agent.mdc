@@ -29,6 +29,14 @@ This repository is the **backend application** for the Secure SoR app. It is **c
 - This backend is consumed by the Lovable frontend; ensure endpoints and payloads match what the frontend expects.
 - The Data Readiness / Boundary agent is a separate service (different repo); this backend may be called by Lovable alongside that agent.
 
+## Agent sync (context shape and API)
+
+The **AI agent** (Data Readiness / Boundary) lives in a separate project (e.g. `Documents/AI Agents/agent`) and receives a **context JSON** built by Lovable from Supabase. This repo is the **source of truth** for that context shape and for-agent notes.
+
+- **For-agent docs:** `docs/for-agent/README.md`, `docs/for-agent/AGENT-TASKS.md`, `docs/for-agent/HANDOFF-FOR-AGENT.md`. Copy-into-agent bundle: `docs/handover-files-for-agent/` (README, CONTEXT-SOURCE, INSTRUCTIONS, AGENT-TASKS, BACKEND-SYNC-NOTES).
+- **Exact agent context shape:** Phase 5 “Agent context shape” in `docs/implementation-plan-lovable-supabase-agent.md` (propertyId, propertyName, reportingYear, optional reportingBoundary/floorsInScope, spaces, systems, nodes, dataLibraryRecords, evidence; DB column names mapped e.g. system_category → category, space_class → spaceClass).
+- **Rule:** For every change that affects data shape or API (properties, spaces, systems, data library, agent context), update `docs/for-agent/` and keep the agent project in sync.
+
 ## Repo
 
 - **GitHub:** https://github.com/Apex-TIGRE/Secure-SoR-backend
