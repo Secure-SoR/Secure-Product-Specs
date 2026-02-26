@@ -240,6 +240,31 @@ On the spaces subpage, in the "Floors in Scope" tile (where the user selects whi
 
 ---
 
+## Lovable prompt: Fix — In-Scope area not saving to DB (Floors in Scope tile)
+
+Use this when the **In-Scope area** (leased area) value entered in the Floors in Scope tile **does not persist** — after Save, the value is lost or the DB column stays null.
+
+**1. Ensure the column exists (Supabase):**  
+Run in Supabase SQL Editor:  
+`ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS in_scope_area numeric;`  
+(See [add-property-in-scope-area.sql](database/migrations/add-property-in-scope-area.sql).)
+
+**Prompt to paste into Lovable:**
+
+```
+The In-Scope area (leased area) in the Floors in Scope tile is not being saved to the database. Fix it so that when the user enters a value and clicks Save, the property row is updated with in_scope_area in Supabase.
+
+1. **Update payload must include in_scope_area:** When the user clicks Save in the Floors in Scope tile, the request to Supabase must send in_scope_area. Find the code that calls supabase.from('properties').update(...) for the Floors in Scope save. The update object must include in_scope_area with the value from the tile (the numeric In-Scope area the user entered). Use the exact column name in_scope_area (snake_case) in the payload. Example: .update({ floors_in_scope: selectedFloors, in_scope_area: inScopeAreaValue ?? null, updated_at: new Date().toISOString() }). If the app uses camelCase (e.g. inScopeArea), map it to in_scope_area when building the update object. Do not omit in_scope_area from the update.
+
+2. **Bind the input to state:** The "In-Scope area" input in the tile must be controlled by state that is included when building the save payload. When the user types a number, store it in state (e.g. inScopeArea or local state for the tile). When Save is clicked, that state value must be passed into the update call as in_scope_area (or mapped to in_scope_area). If the tile uses a separate "save floors" function that only sends floors_in_scope, change it to also read the In-Scope area value and add in_scope_area to the update.
+
+3. **Empty field = null:** If the user leaves In-Scope area empty, send in_scope_area: null so the DB column can be cleared. Parse the input as a number; if empty or invalid, use null.
+
+4. **Verify:** After the fix, open the Floors in Scope tile, enter e.g. 1500 in In-Scope area, click Save. In the browser Network tab, the PATCH or PUT request to the properties table should have a body containing "in_scope_area": 1500 (or the number entered). In Supabase Table Editor, the property row should show that value in the in_scope_area column.
+```
+
+---
+
 ## Lovable prompt: Space creation — fix "you can only create space on your leased floors" when floor is in scope
 
 When the user selects a floor that is already marked as in scope (e.g. "4th" in the dropdown, labelled as leased/in scope) and tries to create a space, they get an error "you can only create space on your leased floors". The validation must allow space creation for any floor that is in `property.floors_in_scope`, and must use the **same** floor identifier everywhere.
@@ -261,6 +286,64 @@ Fix the space creation validation so that when the user selects a floor that is 
 ```
 
 **Quick check:** Save Floors in Scope with the 4th floor selected. Open Create Space, choose the 4th floor from the dropdown. Creation must succeed and must not show "you can only create space on your leased floors".
+
+---
+
+## Debug: "Floor not in your scope" when the floor is shown as leased (DB + identifier mismatch)
+
+**Paste this into Lovable to fix the error:**
+
+```
+Fix "Floor not in your scope" when saving a space. The user has already selected floors in the Floors in Scope tile (e.g. Ground Floor, 4th Floor, 5th Floor) but Add New Space still shows "Floor not in your scope" and blocks save.
+
+Do this:
+1. Find where the "Floor not in your scope" error is shown in the Add New Space / Create Space flow. The validation that blocks save must allow the user to create a space when the selected floor is in property.floors_in_scope. Change the check to: allow save when (property.floors_in_scope || []).includes(selectedFloorValue). If floors_in_scope is null or empty, either allow all floors or show "Save Floors in Scope first" — do not block floors the user already selected.
+
+2. Use the exact same string for the floor everywhere: the Floor dropdown option value must be the same string that is stored in property.floors_in_scope. So if floors_in_scope is ["Ground Floor", "4th Floor", "5th Floor"], the dropdown value when user picks 4th floor must be "4th Floor" (not "4th" or "4" or an id). Build dropdown options from property.floors and use each floor string as the option value. Then selectedFloorValue will match floors_in_scope and the check will pass.
+
+3. Ensure the property loaded in the modal has floors_in_scope from Supabase. When the user opens Add New Space, property must include floors_in_scope (from the same fetch that loads the spaces page). After saving Floors in Scope, refetch the property so the next open of Add New Space has the latest floors_in_scope.
+```
+
+---
+
+If the UI shows "4th Floor" as a leased floor and the Add New Space modal lists "Ground Floor, 4th Floor, 5th Floor" as leased but still shows **"Floor not in your scope"** when the user selects 4th Floor, do the following.
+
+### 1. Check the database (Supabase)
+
+1. Open **Supabase Dashboard** → **Table Editor** → **properties**.
+2. Find the row for the property (e.g. 140 Aldersgate).
+3. Look at the **floors_in_scope** column.
+   - **If it is null or empty:** The Floors in Scope tile is not persisting the selection. Fix the Save so that the update sends `floors_in_scope` with the selected floor identifiers (e.g. `["Ground Floor", "4th Floor", "5th Floor"]`). Ensure the Save handler includes `floors_in_scope` in the payload and that the request succeeds.
+   - **If it has values:** Note the exact format, e.g. `["Ground Floor", "4th Floor", "5th Floor"]` vs `["Ground", "4th", "5th"]`. The validation in Add New Space must use the **exact same** strings.
+
+### 2. Identifier must match everywhere
+
+The error happens when the value sent from the **Floor dropdown** in Add New Space is not exactly equal to one of the entries in **property.floors_in_scope**. For example:
+
+- Floors in Scope tile saves: `["Ground Floor", "4th Floor", "5th Floor"]`.
+- Floor dropdown in Add New Space might be sending: `"4th"` or `"Fourth"` or an id instead of `"4th Floor"`.
+
+Then `(property.floors_in_scope || []).includes(selectedFloor)` is false and the app shows "Floor not in your scope".
+
+**Fix:** Use one and the same string for each floor in: (a) **property.floors** (building list), (b) **property.floors_in_scope** (saved from Floors in Scope tile), (c) **Floor dropdown option value** in Add New Space, (d) **space.floor_reference** when creating the space. If the UI displays "4th Floor", the dropdown’s **value** (what you send to the API and use in the validation) must be exactly `"4th Floor"` and that same string must be in `floors_in_scope`.
+
+### 3. Lovable prompt: Fix "Floor not in your scope" (use same string as DB)
+
+**Prompt to paste into Lovable:**
+
+```
+Users see "Floor not in your scope" when creating a space on a floor that is already selected in Floors in Scope (e.g. 4th Floor shown as "Your Lease"). Fix it.
+
+1. **Validation must use property.floors_in_scope from the DB:** The rule is: allow creating a space when the selected floor value is in property.floors_in_scope. Find where the "Floor not in your scope" (or "you can only create space on your leased floors") error is shown. The check must be: (property.floors_in_scope || []).includes(selectedFloorValue). If property.floors_in_scope is null or [], either allow all floors or tell the user to save Floors in Scope first; do not block floors that the user has already selected as in scope.
+
+2. **Same string in DB and in the dropdown:** The value the Floor dropdown sends when the user picks "4th Floor" must be exactly the same string as stored in property.floors_in_scope. So if the Floors in Scope tile saves ["Ground Floor", "4th Floor", "5th Floor"], then the dropdown option value for the 4th floor must be "4th Floor" (not "4th", "4", or an id). When building the dropdown options from property.floors, use the same string as the option value (e.g. floorOptionValue = floor string from property.floors). When the user selects "4th Floor", selectedFloorValue must be "4th Floor" so that floors_in_scope.includes("4th Floor") is true.
+
+3. **Load fresh property with floors_in_scope:** When opening the Add New Space modal, the property object must include floors_in_scope from Supabase (the same property that was updated when the user saved Floors in Scope). If the modal uses stale state that doesn’t have floors_in_scope, refetch the property when the spaces page loads or when the user saves Floors in Scope, so that the next time they open Add New Space, property.floors_in_scope is up to date.
+
+4. **If the DB has different format:** In Supabase Table Editor, check properties.floors_in_scope for this property. If it is null, the Floors in Scope Save is not persisting — ensure the update payload includes floors_in_scope. If it has values like "4th" but the dropdown uses "4th Floor", either (a) change the tile to save "4th Floor" so it matches the dropdown, or (b) change the dropdown to use "4th" as the value so it matches the DB. The two must match exactly (string comparison).
+```
+
+**Quick check:** In Supabase, set the property’s `floors_in_scope` to `["Ground Floor", "4th Floor", "5th Floor"]` (or whatever format the app uses). Reload the app, open Add New Space, select 4th Floor. The error must disappear and Create Space must succeed.
 
 ---
 
