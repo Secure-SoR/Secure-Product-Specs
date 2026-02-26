@@ -1,0 +1,4 @@
+Name,Reporting period start,Reporting period end,Mode,Quantity km,Unit,Confidence,Property,data_type,Notes
+Commuting Feb 2026 – Train,2026-02-01,2026-02-28,Train,250000,km,estimated,140 Aldersgate,employee_commuting_train,"500 employees; 50% desk-based; min 3 days/week office; mode split 70% train"
+Commuting Feb 2026 – Bus,2026-02-01,2026-02-28,Bus,89000,km,estimated,140 Aldersgate,employee_commuting_bus,"500 employees; 50% desk-based; min 3 days/week office; mode split 25% bus"
+Commuting Feb 2026 – Car,2026-02-01,2026-02-28,Car,17500,km,estimated,140 Aldersgate,employee_commuting_car,"500 employees; 50% desk-based; min 3 days/week office; mode split 5% car"

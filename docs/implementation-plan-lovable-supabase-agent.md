@@ -460,10 +460,49 @@ If the import shows **"Import failed: new row for relation 'systems' violates ch
 
 **If you see "systems_metering_status_check":** The "Metering Status" column has values the DB doesn't accept (e.g. "Submetered", "Fiscal only", "Not tenant-metered"). Run in Supabase SQL Editor the contents of [fix-systems-metering-status-import.sql](../database/migrations/fix-systems-metering-status-import.sql) — that trigger normalizes them to `none` | `partial` | `full`.
 
+**If you see "Import failed: invalid input syntax for type uuid: '1'" (or similar):** A column that expects a **UUID** is receiving a plain number or string like `"1"`. The `systems` table has **serves_space_ids** (uuid[], optional) — it must contain real space UUIDs from the DB, **never** values from the spreadsheet (e.g. row numbers, or a "Key Specs" / "Serves Spaces" cell that contains "1").
+
+**Fix (recommended — backend RPC):** Run the migration [add-insert-system-from-register-rpc.sql](database/migrations/add-insert-system-from-register-rpc.sql) in Supabase SQL Editor, then in Lovable use `supabase.rpc('insert_system_from_register', { payload: {...} })` instead of `.from('systems').insert(...)` for each row (see "Permanent fix" and the Lovable prompt below). The RPC sanitizes bad UUIDs and validates account_id/property_id.
+
+**Fix (app-only):**
+
+1. **Do not map any Excel/CSV column to `serves_space_ids`.** Map "Serves Spaces" (e.g. "Whole Property", "Ground 4th 5th") **only** to **serves_spaces_description** (text). Leave **serves_space_ids** out of the insert payload (or set to `null` / omit) so the DB uses the default.
+2. In the import code, when building the object for `supabase.from('systems').insert(...)`, **never** include `serves_space_ids` from the file. Only include: account_id, property_id (from app context), name, system_category, system_type, controlled_by, metering_status, allocation_method, maintained_by, serves_spaces_description, key_specs, spec_status. If GPT or a mapping tool added a column that maps to serves_space_ids (e.g. "Space ID" or a column with numbers 1, 2, 89), remove that mapping.
+3. If your Excel has a column with plain numbers ("1", "2", "89", "12", etc.) — e.g. in Key Specs or elsewhere — ensure that column is **not** mapped to any UUID field. Only text columns (name, serves_spaces_description, key_specs, etc.) and the normalized enums (controlled_by, metering_status, allocation_method) should come from the file; account_id and property_id must come from the app context only.
+
+Paste the **UUID fix** prompt below into Lovable if the error persists.
+
 **If the error persists after running the DB migration:** Paste the **full** Lovable prompt below (the long one starting with "Implement 'Upload register'…") so the import flow is reimplemented with explicit normalization. Or paste this **allocation-only fix** into Lovable if you already have the upload button and preview:
 
 ```
 In the register import (Upload register) code: before calling supabase.from('systems').insert() for each row, normalize allocation_method so the payload always has exactly one of: "measured", "area", "estimated", "mixed" (lowercase). Do not send the raw CSV value. Use a function: take the "Allocation Method" cell string (e.g. "Service charge allocation", "Direct measured"), convert to lowercase, then if it includes "direct" and "measured" or "direct" and "billed" → use "measured"; if it includes "service charge" or "area allocation" or "embedded" or "whole building" or "submeter" → use "area"; if it includes "mixed" or "part measured" → use "mixed"; if it includes "estimated" → use "estimated"; otherwise use "estimated". Set the insert payload field allocation_method to this normalized value. Same for metering_status: must be "none", "partial", or "full"; and controlled_by: must be "tenant", "landlord", or "shared" (normalize from Tenant/Landlord/Shared or tenant_controlled/landlord_controlled).
+```
+
+**Lovable prompt (UUID fix) — if you see "invalid input syntax for type uuid: '1'":**
+
+```
+In the building systems register import (Upload register): when building the payload for supabase.from('systems').insert(), do NOT include serves_space_ids from the spreadsheet. The column serves_space_ids in the DB is uuid[] (array of space UUIDs from the spaces table). Never map any Excel/CSV column to serves_space_ids — numbers like "1", "2", or "89" from the file are not UUIDs and will cause "invalid input syntax for type uuid" errors. Map "Serves Spaces" (text like "Whole Property", "Ground 4th 5th") only to serves_spaces_description. Omit serves_space_ids from the insert payload entirely (or set it to null). The insert payload must only include: account_id (from app context), property_id (from app context), name, system_category, system_type, controlled_by, metering_status, allocation_method, maintained_by (optional), serves_spaces_description (optional), key_specs (optional), spec_status (optional). No other columns from the file should be mapped to UUID or uuid[] fields.
+```
+
+**Permanent fix (use safe RPC so import always works):**
+
+1. **Run the migration in Supabase:** In SQL Editor, run the full contents of [add-insert-system-from-register-rpc.sql](database/migrations/add-insert-system-from-register-rpc.sql). This creates `insert_system_from_register(payload jsonb)` which sanitizes `serves_space_ids` (drops any non-UUID like "1" or "89") and validates `account_id` / `property_id` are real UUIDs.
+2. **Change Lovable to use the RPC instead of direct insert:** For each row in the register import, call the RPC instead of `.from('systems').insert()`. Paste the prompt below into Lovable.
+
+**Lovable prompt — switch register import to safe RPC (stops UUID error):**
+
+```
+In the building systems register import (Upload register): stop using supabase.from('systems').insert(row) for each row. Instead, for each valid row build a single payload object with: account_id (current account UUID from app context), property_id (current property UUID from app context), name, system_category, system_type, controlled_by, metering_status, allocation_method, maintained_by (optional), serves_spaces_description (optional), key_specs (optional), spec_status (optional). Do NOT add serves_space_ids from the file — the backend RPC will ignore invalid values anyway, but keep the payload simple. Then call: supabase.rpc('insert_system_from_register', { payload: thatObject }). The RPC returns the new system id. Use this for every row in the import. On success you get "N systems added"; on error the RPC returns a clear message (e.g. if account_id or property_id were wrong). Refetch the systems list after import. Ensure account_id and property_id are the actual UUID strings from your app context (e.g. currentAccountId, currentPropertyId), not row numbers or indexes.
+```
+
+**If you see "property_id must be a valid UUID, got \"1\"":** The import is sending the string `"1"` as property_id instead of the real property UUID. Fix it in Lovable:
+
+**Lovable prompt — fix property_id in register import (use page property, not "1"):**
+
+```
+The building systems register import is sending property_id "1" to the RPC, which is wrong. property_id must be the UUID of the property whose Building Systems page is open (e.g. 140 Aldersgate).
+
+Fix: When building the payload for insert_system_from_register, set property_id from the same source you use to load the systems list on this page. For example: if the Building Systems / Physical & Technical page is under a route like /properties/:propertyId/... or /property/:id/..., use that route param (propertyId or id) as the UUID. If the page gets the current property from a context (e.g. useProperty(), selectedPropertyId, or the same variable used in supabase.from('systems').select().eq('property_id', ...)), use that exact variable for property_id in the payload. Do NOT use: the number 1, the string "1", a row index, or any column from the spreadsheet. The value must be a UUID string that looks like "550e8400-e29b-41d4-a716-446655440000". Check where the page gets the current property when it fetches the list of systems — use that same value for every row in the import payload.
 ```
 
 ---

@@ -1,0 +1,5 @@
+Name,Reporting period start,Reporting period end,Employee,Trip description,Origin,Destination,Quantity km,Unit,Confidence,Property,data_type,Notes
+Business travel Jan 2026 – Helen Brooks Coach,2026-01-01,2026-01-31,Helen Brooks,Team offsite,London Victoria,Oxford,98,km,measured,140 Aldersgate,business_travel_bus,Return coach
+Business travel Jan 2026 – Raj Patel Coach,2026-01-01,2026-01-31,Raj Patel,Conference,London Stratford,Brighton,88,km,measured,140 Aldersgate,business_travel_bus,Return coach
+Business travel Jan 2026 – Claire Dubois Coach,2026-01-01,2026-01-31,Claire Dubois,Training,London Victoria,Cambridge,102,km,measured,140 Aldersgate,business_travel_bus,Return coach
+Business travel Jan 2026 – Ahmed Al-Rashid Coach,2026-01-01,2026-01-31,Ahmed Al-Rashid,Client visit,London Victoria,Luton,56,km,measured,140 Aldersgate,business_travel_bus,Return coach

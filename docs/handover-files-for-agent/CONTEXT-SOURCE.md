@@ -1,67 +1,41 @@
-# Context source — where the agent gets its input
+# Agent context shape (Phase 5 — source: Supabase)
 
-The agent **does not read the database**. It receives a **single context JSON** in the request body. That JSON is built by **Lovable** (or your orchestration) by fetching from **Supabase** and mapping to the shape below.
+Context is built by **Lovable** (or your orchestration) from Supabase and sent to the agent in the request body. The agent does not read the DB directly.
 
 ---
 
 ## Where context comes from
 
-- **Lovable** (or your service) fetches for the selected property and account:
-  - `properties` (one row by id)
-  - `spaces` (by property_id)
-  - `systems` (by property_id)
-  - `end_use_nodes` (by property_id), if present
-  - `data_library_records` (by property_id or account)
-  - `evidence_attachments` + `documents` for those records (to build the evidence list)
-- It builds one **context object** that matches the “Agent context shape” and **POSTs** it to your agent (e.g. `/api/data-readiness` or `/api/boundary`).
+- **properties** (one row by property id)
+- **spaces** (by property_id)
+- **systems** (by property_id)
+- **end_use_nodes** (by property_id), if present
+- **data_library_records** (by property_id or account)
+- **evidence_attachments** + **documents** (for those records → evidence list)
+- **property_utility_applicability** (by property_id) — optional; for coverage/completeness reasoning
+- **property_service_charge_includes** (by property_id) — optional; for coverage/completeness reasoning
 
-So: **context = one JSON payload per request; data originally comes from Supabase.**
-
----
-
-## Backend repo: path and files to read
-
-**Backend repo (source of truth for context shape and DB):**  
-**Secure-SoR-backend**
-
-**Default path (adjust if your clone is elsewhere):**
-```
-/Users/anamariaspulber/Documents/Secure-SoR-backend
-```
-
-If the agent repo sits next to it:
-```
-../Secure-SoR-backend
-```
-
-**Read these files in the backend repo, in this order:**
-
-| Priority | Path (relative to backend repo root) | Purpose |
-|----------|--------------------------------------|--------|
-| 1 | `docs/for-agent/README.md` | Sync notes: property/spaces/systems/Data Library columns, context source, Phase 5 pointer. |
-| 2 | `docs/for-agent/AGENT-TASKS.md` | Concrete to-do: context input (floorsInScope, optional fields), API contract, data library (subject_category, no emissions as records). |
-| 3 | `docs/implementation-plan-lovable-supabase-agent.md` | **Phase 5** section: exact “Agent context shape” (propertyId, propertyName, spaces, systems, nodes, dataLibraryRecords, evidence), ID format, how Lovable builds context. |
-| 4 | `docs/database/schema.md` | Table definitions (properties, spaces, systems, data_library_records, documents, evidence_attachments) when you need column-level detail. |
-| 5 | `Secure_Canonical_v5.md` (if present in repo root or docs) | Product/domain and reporting boundary; principles. |
-
-**Optional (Data Library / coverage):**  
-`docs/data-library-what-to-do-next.md`; `docs/sources/Secure_Data_Library_Taxonomy_v3_Activity_Emissions_Model.md`; `docs/sources/Secure_KPI_Coverage_Logic_Spec_v1.md` if the agent later receives coverage.
+Map DB column names to the agent's expected names (e.g. `system_category` → `category`, `space_class` → `spaceClass`).
 
 ---
 
-## Agent context shape (summary)
-
-Your **input schema** must match the backend’s Phase 5 “Agent context shape”. Minimal expectation:
+## Minimal context shape (what the agent expects)
 
 - `propertyId`, `propertyName`, `reportingYear`
 - `reportingBoundary` (optional): e.g. `{ boundaryApproach, includedPropertyIds, methodologyFramework }`
-- `floorsInScope` (optional): array of floor identifiers the tenant occupies (from `properties.floors_in_scope`)
-- `spaces`: array of `{ id, name, spaceClass, control, inScope, area, floorReference, spaceType, parentSpaceId }`; optional `children` when sent as tree
-- `systems`: array of `{ id, category, controlledBy, meteringStatus, allocationMethod, servesSpaces }` (backend DB has `system_category` → map to `category`)
+- `floorsInScope` (optional): array of floor identifiers the tenant occupies (from `properties.floors_in_scope`); helps agent reason about reporting boundary
+- `spaces`: array of `{ id, name, spaceClass, control, inScope, area, floorReference, spaceType, parentSpaceId }`; optional `parentSpaceId` for hierarchy (subspaces); optional `children` array when sending a tree. Flat list is fine; agent can build tree from parentSpaceId.
+- `systems`: array of `{ id, category, controlledBy, meteringStatus, allocationMethod, servesSpaces }` (agent accepts `category`; DB has `system_category` + `system_type` — map when building context)
 - `nodes` (optional): array of `{ id, systemId, type, controlOverride, allocationWeight, spaceIds }`
-- `dataLibraryRecords`: array of `{ id, category, reportingYear, propertyId, confidenceLevel }` (and optionally more); use **subject_category** (energy, water, waste, etc.); **emissions are not stored as records**
-- `evidence`: array of `{ id, recordId, recordType, recordName, fileName }`
+- `dataLibraryRecords`: array of `{ id, category, reportingYear, propertyId, confidenceLevel }` — use **subject_category** from DB as category (energy, water, waste, etc.). Emissions are never stored as records; they are derived.
+- `evidence`: array of `{ id, recordId, recordType, recordName, fileName }` (for display; agent may use for references)
+- Optional: `workforceDatasets`, `certificates` (can be empty arrays)
+- **Optional for coverage:** `propertyUtilityApplicability` (array of `{ component, applicability }` per property), `propertyServiceChargeIncludes` (e.g. `{ includesEnergy, includesWater, includesHeating }`) — see COVERAGE-AND-APPLICABILITY-FOR-AGENT.md
 
-**IDs:** Supabase UUIDs for property/spaces/systems are fine; document whether you expect UUIDs or string ids and keep consistent with what Lovable sends.
+**ID format:** Agent is flexible. You can use Supabase UUIDs as `id` for spaces/systems and map `servesSpaces` / `spaceIds` to those same UUIDs. Keep `systemId` in nodes as the system's `id` (UUID or string).
 
-For the **exact** shape and field names, always refer to the backend: **Phase 5** of `docs/implementation-plan-lovable-supabase-agent.md` in the Secure-SoR-backend repo.
+---
+
+## Full reference
+
+The full Phase 5 section (Lovable fetch steps, optional agent_runs/agent_findings) lives in the backend repo: docs/implementation-plan-lovable-supabase-agent.md. This file is the extracted "context shape" so the agent project has it in one place.

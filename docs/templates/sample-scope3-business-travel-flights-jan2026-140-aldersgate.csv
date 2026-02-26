@@ -1,0 +1,9 @@
+Name,Reporting period start,Reporting period end,Employee,Trip description,Origin,Destination,Quantity km,Unit,Confidence,Property,data_type,Notes
+Business travel Jan 2026 – Sarah Chen,2026-01-01,2026-01-31,Sarah Chen,Client workshop,London Heathrow,Edinburgh,534,km,measured,140 Aldersgate,business_travel_flights,Return flight
+Business travel Jan 2026 – James Wright,2026-01-01,2026-01-31,James Wright,Partner meeting,London Heathrow,Dublin,464,km,measured,140 Aldersgate,business_travel_flights,Return flight
+Business travel Jan 2026 – Priya Sharma,2026-01-01,2026-01-31,Priya Sharma,Conference,London Gatwick,Glasgow,556,km,measured,140 Aldersgate,business_travel_flights,Return flight
+Business travel Jan 2026 – Marcus Webb,2026-01-01,2026-01-31,Marcus Webb,Site visit,London City,Belfast City,518,km,measured,140 Aldersgate,business_travel_flights,Return flight
+Business travel Jan 2026 – Emma Foster,2026-01-01,2026-01-31,Emma Foster,Training,London Heathrow,Manchester,262,km,measured,140 Aldersgate,business_travel_flights,Return flight
+Business travel Jan 2026 – David Okonkwo,2026-01-01,2026-01-31,David Okonkwo,Board meeting,London Heathrow,Amsterdam,358,km,measured,140 Aldersgate,business_travel_flights,Return flight
+Business travel Jan 2026 – Lisa Bergström,2026-01-01,2026-01-31,Lisa Bergström,EU project kick-off,London Stansted,Brussels,322,km,measured,140 Aldersgate,business_travel_flights,Return flight
+Business travel Jan 2026 – Tom Fletcher,2026-01-01,2026-01-31,Tom Fletcher,Client pitch,London Heathrow,Paris CDG,344,km,measured,140 Aldersgate,business_travel_flights,Return flight

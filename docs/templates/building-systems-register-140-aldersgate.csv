@@ -1,0 +1,19 @@
+System Name,systemCategory,systemType,Controlled By,Maintained By,Serves Spaces,Metering Status,Allocation Method,Key Specs,Spec Status
+Main Incoming Electricity Supply,Power,GridLVSupply,Landlord,Landlord,Whole Property,Fiscal meter,Fiscal only,Supply No. 1200051331498,REAL
+Tenant Electricity Submeters (6 total),Power,ElectricitySubmeters,Tenant,Landlord (meter infra),Ground 4th 5th,Submetered,Direct measured,Meter IDs confirmed (6),REAL
+Main Gas Meter,Power,GasSupply,Landlord,Landlord,Whole Property,Fiscal only,Service charge allocation,Gas intake room,REAL
+Base Building HVAC Plant,HVAC,CentralPlant_Unknown,Landlord,Landlord,Whole Building,Not tenant-metered,Embedded in service charge,Plant specs unknown,REAL
+Local HVAC Controls,HVAC,ZoneControls,Shared,Tenant (local) / Landlord (plant),Ground 4th 5th,Not separately metered,Electricity + service charge,Shared operational boundary,REAL
+Simmtronic SPECS,Lighting,LegacyLightingControl,Landlord,Landlord,Whole Building,Included in electricity,Service charge embedded,"~20 yrs old; LCM ceiling units; 15V E-BUS; on/off only",REAL
+EnOcean Motion Sensors,Lighting,OccupancySensors,Tenant,Tenant,Ground 4th 5th,Data-only,Included in tenant electricity,89 installed,REAL
+Danlers Climate Sensors,Lighting,EnvironmentalSensors,Tenant,Tenant,Ground 4th 5th,Data-only,Included in tenant electricity,12 installed,REAL
+Lighting Gateways,Lighting,GatewayDevices,Tenant,Tenant,Ground 4th 5th,Data-only,Included in tenant electricity,2 installed,REAL
+IT & Small Power,PlugLoads,TenantPlugLoads,Tenant,Tenant,Ground 4th 5th,Included in tenant electricity,Direct measured,Embedded in floor submeters,REAL
+Fiscal Water Meter,Water,MainsSupply,Landlord,Landlord,Whole Property,Single fiscal meter,Area allocation,Boiler room,REAL
+Tenant Water Allocation,Water,AllocatedConsumption,Landlord (billing),Landlord,Ground 4th 5th,Not submetered,Service charge,Toilets in landlord space; tenant cannot retrofit fixtures,REAL
+Waste Contractor – Recorra,Waste,WasteCollection,Shared,Landlord contract,Ground 4th 5th,Measured by weight,Direct billed by stream,Confirmed streams; Office Guide,REAL
+Recycling Stations,Waste,SegregatedWasteInfrastructure,Shared,Landlord,Ground 4th 5th,Not metered,Included in contract,"Streams: household, glass, tins/cans, plastics, mixed paper & card",REAL
+Trend IQ Vision,BMS,CentralBMS,Landlord,Landlord,Whole Building,N/A (control system),N/A,Head-end in site office,REAL
+Haltian People Counting Sensors,Monitoring,PeopleCountingSensors,Tenant,Tenant,Ground 4th 5th,Data-only,N/A,38 sensors,REAL
+Paxton Net2,Monitoring,AccessControl,Tenant,Tenant,Ground 4th 5th,Data-only,N/A,Tenant-managed access,REAL
+Passenger Lifts,Lifts,PassengerLift,Landlord,Landlord,Whole Building,Not tenant-metered,Service charge allocation,3 × 16-person lifts,REAL

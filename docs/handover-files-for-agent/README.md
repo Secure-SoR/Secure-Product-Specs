@@ -1,44 +1,15 @@
-# Handover: AI agent (Data Readiness / Boundary)
+# Agent instructions — copy this folder into your AI agent project
 
-**Copy this entire folder into your AI agent project** (e.g. `Documents/AI Agents/agent`). It contains everything the agent needs to align with the backend (Secure-SoR-backend) and Lovable.
+This folder is a **self-contained copy** of everything the Secure SoR backend expects from the **AI agent** (Data Readiness / Boundary). Use it as the single instruction set when building or updating the agent.
 
----
+**Read in this order:**
 
-## What’s in this folder
+1. **INSTRUCTIONS.md** — What the agent should do, how it receives context, and a quick checklist.
+2. **CONTEXT-SOURCE.md** — Where context comes from (Supabase) and the exact Agent context shape (Phase 5).
+3. **AGENT-TASKS.md** — Concrete to-do: context input, API contract, data library, coverage and applicability.
+4. **BACKEND-SYNC-NOTES.md** — Backend/Lovable sync notes: properties, spaces, systems, data library, utility applicability and service charge includes.
+5. **COVERAGE-AND-APPLICABILITY-FOR-AGENT.md** — How to use property_utility_applicability and property_service_charge_includes for water/heating completeness and KPI coverage.
 
-| File | Purpose |
-|------|--------|
-| **README.md** (this file) | Overview and entry point for the agent project. |
-| **CONTEXT-SOURCE.md** | Where context comes from (Supabase via Lovable), which backend files define the context shape, and the path to the backend repo. |
-| **INSTRUCTIONS.md** | What the agent must do: apply to new property records, use context from the DB, stay in sync with backend. |
-| **AGENT-TASKS.md** | Concrete to-do list: context input (floorsInScope, optional fields), API contract, data library (subject_category, no emissions as records). |
-| **BACKEND-SYNC-NOTES.md** | Condensed backend sync notes (properties, spaces, systems, Data Library, Phase 5) so the agent has the same reference as `docs/for-agent/` in the backend. |
+**Backend repo (source of truth):** Secure-SoR-backend. When the backend adds or changes context shape, DB columns, or coverage rules, update this folder (or re-copy from docs/for-agent/ and docs/architecture/coverage-and-applicability-for-agent.md) so the agent stays in sync.
 
----
-
-## What the agent does
-
-- **Runs in the context of a property.** Lovable (or your orchestration) fetches that property’s data from Supabase and sends you a **single context JSON** in the request body. The agent does not query the database; it only receives and processes that payload.
-- **Must work for any property.** When users create new properties in the app, those are stored in Supabase. The agent should accept context for **any** property id (UUID from Supabase), not only a fixed demo property.
-- **Context shape** is defined in the backend: see **CONTEXT-SOURCE.md** and the Phase 5 “Agent context shape” section in the backend’s implementation plan. Your input schema must match that (propertyId, propertyName, spaces, systems, nodes, dataLibraryRecords, evidence; optional floorsInScope, reportingBoundary).
-
----
-
-## Quick start
-
-1. Read **INSTRUCTIONS.md** for behaviour and rules.
-2. Read **CONTEXT-SOURCE.md** to see where context comes from and which backend files to read for the exact schema.
-3. Use **AGENT-TASKS.md** as a checklist when implementing or updating the agent.
-4. When the backend or Lovable change context or APIs, re-read the backend’s `docs/for-agent/` (see CONTEXT-SOURCE.md for the path) and update the agent’s schema and logic if needed.
-
----
-
-## Backend repo location
-
-Context shape and API contract are defined in the **Secure-SoR-backend** repo. Default path (adjust if your clone is elsewhere):
-
-```
-/Users/anamariaspulber/Documents/Secure-SoR-backend
-```
-
-See **CONTEXT-SOURCE.md** for the exact list of files to read in that repo (e.g. `docs/for-agent/README.md`, `docs/for-agent/AGENT-TASKS.md`, Phase 5 of the implementation plan).
+**Rule:** For every change that affects the agent (data shape, API, coverage), the backend updates docs/for-agent/ and this handover folder; you apply the same in the agent project.

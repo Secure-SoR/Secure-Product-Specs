@@ -1,0 +1,9 @@
+Name,Reporting period start,Reporting period end,Employee,Trip description,Origin,Destination,Quantity km,Unit,Confidence,Property,data_type,Notes
+Business travel Jan 2026 – Emma Foster Rail,2026-01-01,2026-01-31,Emma Foster,Client meeting,London King's Cross,Manchester Piccadilly,262,km,measured,140 Aldersgate,business_travel_rail,Return
+Business travel Jan 2026 – David Okonkwo Rail,2026-01-01,2026-01-31,David Okonkwo,Regional office,London Paddington,Bristol Temple Meads,189,km,measured,140 Aldersgate,business_travel_rail,Return
+Business travel Jan 2026 – Rachel Kim Rail,2026-01-01,2026-01-31,Rachel Kim,Audit visit,London Euston,Birmingham New Street,170,km,measured,140 Aldersgate,business_travel_rail,Return
+Business travel Jan 2026 – Oliver Jones Rail,2026-01-01,2026-01-31,Oliver Jones,Site review,London King's Cross,Leeds,272,km,measured,140 Aldersgate,business_travel_rail,Return
+Business travel Jan 2026 – Yuki Tanaka Rail,2026-01-01,2026-01-31,Yuki Tanaka,Workshop,London Liverpool Street,Cambridge,89,km,measured,140 Aldersgate,business_travel_rail,Return
+Business travel Jan 2026 – Fatima Hassan Rail,2026-01-01,2026-01-31,Fatima Hassan,Training,London Waterloo,Southampton,158,km,measured,140 Aldersgate,business_travel_rail,Return
+Business travel Jan 2026 – Ben Clarke Rail,2026-01-01,2026-01-31,Ben Clarke,Supplier meeting,London St Pancras,Sheffield,258,km,measured,140 Aldersgate,business_travel_rail,Return
+Business travel Jan 2026 – Sophie Martin Rail,2026-01-01,2026-01-31,Sophie Martin,Conference,London Paddington,Cardiff Central,245,km,measured,140 Aldersgate,business_travel_rail,Return

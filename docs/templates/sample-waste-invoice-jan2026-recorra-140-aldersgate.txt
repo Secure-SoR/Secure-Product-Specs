@@ -1,0 +1,36 @@
+SAMPLE INVOICE – Waste & Recycling – January 2026
+================================================
+
+Contractor: Recorra
+Invoice No: REC-0126-140ALD
+Invoice Date: 31 January 2026
+Billed To: Apex Group Services UK
+Property: 140 Aldersgate
+Address: 140 Aldersgate Street, London EC1A 4HY
+
+Period: January 2026 (01 Jan 2026 – 31 Jan 2026)
+
+WASTE STREAMS – WEIGHT (kg) & COST
+----------------------------------
+Stream                  | Weight (kg) | Net (£)
+------------------------|-------------|--------
+Household waste         |        420  |  168.00
+Mixed paper & card      |        285  |   57.00
+Plastics                |        120  |   24.00
+Mixed glass             |         95  |   19.00
+Food tins & drink cans  |         48  |    9.60
+------------------------|-------------|--------
+Total weight            |        968  |
+Net total               |             |  277.60
+VAT (20%)               |             |   55.52
+TOTAL DUE               |             |  333.12
+
+Confidence: Measured by weight
+Contract type: Direct tenant / Third-party
+Scope: 3 (Waste – Category 5)
+
+---
+This is a sample waste invoice for testing the Data Library Waste upload.
+Use it on the Waste page: Upload → select this file. The app should create
+a data_library_record with subject_category "waste", name e.g. "Waste Jan 2026 – Recorra",
+and attach this file as evidence. Property: 140 Aldersgate.

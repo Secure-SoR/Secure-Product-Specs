@@ -1,0 +1,2 @@
+Name,Reporting period start,Reporting period end,Fuel type,Quantity,Unit,Total cost GBP,Confidence,Invoice ref,Property,data_type,Notes
+Scope 1 Gas Feb 2026,2026-02-01,2026-02-28,Natural gas,1150,kWh,345.00,measured,S1G-0226-140ALD,140 Aldersgate,scope1_stationary,Stationary combustion. Main gas meter. Base building. 140 Aldersgate Street London.

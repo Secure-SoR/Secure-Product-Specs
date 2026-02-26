@@ -1,0 +1,2 @@
+Name,Reporting period start,Reporting period end,Supplier,Total kWh,Total cost GBP,Unit,Confidence,Invoice ref,Property,data_type,Notes
+Tenant Electricity Feb 2026 – MAPP,2026-02-01,2026-02-28,MAPP,41400,13650.00,kWh,measured,MAPP-0226-LTHQ,Lumen Technology HQ,tenant_electricity,Direct tenant supply. 5 floors 2500 sqm. Submetered.

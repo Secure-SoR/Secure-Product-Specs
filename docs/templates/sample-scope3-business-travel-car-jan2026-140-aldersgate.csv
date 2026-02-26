@@ -1,0 +1,6 @@
+Name,Reporting period start,Reporting period end,Employee,Trip description,Origin,Destination,Quantity km,Unit,Confidence,Property,data_type,Notes
+Business travel Jan 2026 – Michael Torres,2026-01-01,2026-01-31,Michael Torres,Client site,140 Aldersgate London,Birmingham,165,km,measured,140 Aldersgate,business_travel_car,Return; no viable rail
+Business travel Jan 2026 – Anna Kowalski,2026-01-01,2026-01-31,Anna Kowalski,Equipment delivery,140 Aldersgate London,Slough,42,km,measured,140 Aldersgate,business_travel_car,Return
+Business travel Jan 2026 – Chris Murphy,2026-01-01,2026-01-31,Chris Murphy,Site survey,140 Aldersgate London,Reading,72,km,measured,140 Aldersgate,business_travel_car,Return
+Business travel Jan 2026 – Nadia Petrov,2026-01-01,2026-01-31,Nadia Petrov,Client workshop,140 Aldersgate London,Guildford,58,km,measured,140 Aldersgate,business_travel_car,Return
+Business travel Jan 2026 – James Liu,2026-01-01,2026-01-31,James Liu,Regional visit,140 Aldersgate London,Milton Keynes,88,km,measured,140 Aldersgate,business_travel_car,Return

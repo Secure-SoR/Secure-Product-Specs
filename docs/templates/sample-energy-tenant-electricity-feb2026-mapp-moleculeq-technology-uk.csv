@@ -1,0 +1,2 @@
+Name,Reporting period start,Reporting period end,Supplier,Total kWh,Total cost GBP,Unit,Confidence,Invoice ref,Property,data_type,Notes
+Tenant Electricity Feb 2026 – MAPP,2026-02-01,2026-02-28,MAPP,16550,5460.00,kWh,measured,MAPP-0226-MOLQ,MoleculeQ Technology UK,tenant_electricity,Direct tenant supply. 1 floor 1000 sqm. Submetered.

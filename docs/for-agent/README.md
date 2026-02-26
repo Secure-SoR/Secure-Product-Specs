@@ -28,6 +28,8 @@ The **AI agent** (Data Readiness / Boundary) lives in a **separate project** (e.
 
 **Agent:** Context may include `dataLibraryRecords` and `evidence` (record id, type, name, file name, subject_category). Use **subject_category** to reason about activity layer (energy, waste, etc.); do not expect emissions as records. If the agent ever receives **coverage** (Complete/Partial/Unknown per KPI), it will come from CoverageEngine output (utilityComponentProfile, kpiAssessments); see KPI Coverage spec. Ensure field names match what Lovable sends (implementation plan Phase 5 “Agent context shape”).
 
+**Coverage and applicability (for agent and inference):** The backend stores per-property **utility applicability** and **service charge includes** so the agent and CoverageEngine can infer KPI completeness (Complete/Partial/Unknown). Tables: `property_utility_applicability` (component: tenant_electricity | landlord_recharge | heating | water | waste; applicability: separate_bill | included_in_service_charge | both | not_applicable) and `property_service_charge_includes` (includes_energy, includes_water, includes_heating). Use these to reason about water/heating: e.g. water is complete when the right combination of water source + service charge is uploaded. See [Coverage and applicability for agent](../architecture/coverage-and-applicability-for-agent.md).
+
 ---
 
 ## Phase 5: Build agent context and call the agent
@@ -44,3 +46,4 @@ The **AI agent** (Data Readiness / Boundary) lives in a **separate project** (e.
 - [ ] Property/spaces/systems IDs: agent accepts UUIDs (from Supabase) or string ids; document which the agent expects.
 - [ ] API endpoint and request/response contract are documented (e.g. in agent repo `AGENT-SUMMARY.md` or API docs) so Lovable can call the agent correctly.
 - [ ] Data library: agent expects `dataLibraryRecords` with `subject_category` (energy, waste, etc.); does not treat emissions as stored records. If coverage is added to context later, it follows `docs/sources/Secure_KPI_Coverage_Logic_Spec_v1.md`.
+- [ ] Coverage: when reasoning about water/heating completeness, agent reads `property_utility_applicability` and `property_service_charge_includes`; see `docs/architecture/coverage-and-applicability-for-agent.md`.
