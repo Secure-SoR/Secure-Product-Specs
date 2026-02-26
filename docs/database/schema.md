@@ -129,6 +129,7 @@ Property (building/site). Account-scoped.
 | occupancy_scope    | text | YES      | Tenant footprint: `whole_building` \| `partial_building` (spaces subpage) |
 | floors     | jsonb     | YES      | All floor identifiers in the building (property overview) |
 | floors_in_scope   | jsonb     | YES      | Subset of floors the tenant occupies; saved from "Floors in Scope" tile (spaces subpage) |
+| in_scope_area    | numeric   | YES      | Tenant footprint area (e.g. m²); editable in Floors in Scope tile (migration: add-property-in-scope-area.sql) |
 | total_area | numeric   | YES      | |
 | created_at | timestamptz | NO    | |
 | updated_at | timestamptz | NO    | |

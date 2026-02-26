@@ -92,6 +92,7 @@ Goal: Create properties, add spaces/systems and data library (bills, governance)
 | properties.occupancy_scope | Optional; `whole_building` \| `partial_building` — tenant footprint at this property (selected on spaces subpage) |
 | properties.floors | All floor identifiers in the building (property overview) |
 | properties.floors_in_scope | Optional; subset of floors the tenant occupies (saved from "Floors in Scope" tile on spaces subpage; persist on Save) |
+| properties.in_scope_area | Optional; tenant footprint area (e.g. m²), editable in Floors in Scope tile; run migration add-property-in-scope-area.sql if missing |
 | properties.total_area | Optional |
 | spaces.parent_space_id | null = top-level; set to parent space id for subspaces (e.g. meeting rooms under a floor) |
 | spaces.space_class | `tenant` \| `base_building` |
@@ -144,7 +145,7 @@ Use Supabase for properties instead of localStorage.
 
 2. When loading the list of properties, use: supabase.from('properties').select('*').eq('account_id', currentAccountId). Use the returned rows as the source of truth; do not read the property list from localStorage.
 
-3. When the user updates a property, use supabase.from('properties').update({ name, address, city, region, postcode, country, nla, asset_type, year_built, last_renovation, operational_status, occupancy_scope, floors, floors_in_scope, total_area, updated_at: new Date().toISOString() }).eq('id', propertyId). When they delete a property, use supabase.from('properties').delete().eq('id', propertyId).
+3. When the user updates a property, use supabase.from('properties').update({ name, address, city, region, postcode, country, nla, asset_type, year_built, last_renovation, operational_status, occupancy_scope, floors, floors_in_scope, in_scope_area, total_area, updated_at: new Date().toISOString() }).eq('id', propertyId). When they delete a property, use supabase.from('properties').delete().eq('id', propertyId).
 
 4. Ensure currentAccountId is set (from account_memberships after login) before any property query. Use the same Supabase client and auth session you already use for account creation and login.
 ```
@@ -212,6 +213,54 @@ The "Floors in Scope" tile on the spaces subpage shows all floors of the buildin
 
 4. Data layer: Add floors_in_scope to the Supabase property interface and to the useProperties converter (e.g. floorsInScope: row.floors_in_scope ?? null). Include floors_in_scope (or floorsInScope mapped to floors_in_scope) in the property update payload when saving so the Save action persists correctly.
 ```
+
+---
+
+## Lovable prompt: Floors in Scope tile — add In-Scope area
+
+The property page shows building-level info including total area; the **Floors in Scope** tile is where the tenant selects which floors are in scope. Add the possibility to enter the **In-Scope area** (tenant footprint area, e.g. m²) in that same tile, so it is saved with the floor selection.
+
+**Backend (run once if the column is missing):**  
+Run [add-property-in-scope-area.sql](database/migrations/add-property-in-scope-area.sql) in Supabase SQL Editor:  
+`ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS in_scope_area numeric;`
+
+**Prompt to paste into Lovable:**
+
+```
+On the spaces subpage, in the "Floors in Scope" tile (where the user selects which floors are in scope), add the possibility to enter the In-Scope area, like the property page has for the whole building.
+
+1. In the Floors in Scope tile, add an optional field: "In-Scope area" (numeric, unit e.g. m² or sq ft — use the same unit as the property page if applicable). This is the total area that is in scope for the tenant (e.g. when they occupy only some floors). Label it clearly (e.g. "In-Scope area (m²)").
+
+2. When the user clicks Save in the Floors in Scope tile, persist both (a) the selected floors (floors_in_scope) and (b) the In-Scope area value. Update the current property: supabase.from('properties').update({ floors_in_scope: <array of selected floor ids>, in_scope_area: <number or null>, updated_at: new Date().toISOString() }).eq('id', propertyId). If the field is empty, send null.
+
+3. When loading the property for the spaces page, include in_scope_area in the select. When the tile renders, pre-fill the In-Scope area from property.in_scope_area (or inScopeArea in the app) so the user sees the saved value.
+
+4. Data layer: Add in_scope_area to the Supabase property interface and to the useProperties converter (e.g. inScopeArea: row.in_scope_area ?? null). Include it in the property update payload when saving the Floors in Scope tile.
+```
+
+---
+
+## Lovable prompt: Space creation — fix "you can only create space on your leased floors" when floor is in scope
+
+When the user selects a floor that is already marked as in scope (e.g. "4th" in the dropdown, labelled as leased/in scope) and tries to create a space, they get an error "you can only create space on your leased floors". The validation must allow space creation for any floor that is in `property.floors_in_scope`, and must use the **same** floor identifier everywhere.
+
+**Prompt to paste into Lovable:**
+
+```
+Fix the space creation validation so that when the user selects a floor that is already in the "Floors in Scope" list (e.g. 4th floor shown as leased/in scope in the dropdown), they can create a space on that floor without seeing "you can only create space on your leased floors".
+
+1. **Single source of truth:** "Leased" or "in scope" floors are those in property.floors_in_scope (saved from the Floors in Scope tile). The rule is: allow creating a space when the selected floor is in property.floors_in_scope. Do not use a different list or hardcoded floors for this check.
+
+2. **Same identifier everywhere:** The floor value used when creating the space (space.floor_reference) must be exactly the same string as stored in property.floors and in property.floors_in_scope. For example, if the building has floors ["Ground", "1", "2", "3", "4th"] and the user selected "4th" as in scope, then floors_in_scope is ["Ground", "4th"] (or similar). The floor dropdown in the Create Space form must offer the same identifiers (e.g. "4th", not "4" in one place and "4th" in another). When the user picks "4th", floor_reference must be "4th", and the validation must check: (property.floors_in_scope || []).includes(selectedFloor) or the equivalent, where selectedFloor is the same value as will be saved to space.floor_reference.
+
+3. **Validation logic:** In the Create Space flow, before showing "you can only create space on your leased floors", check: Is the currently selected floor value present in property.floors_in_scope? If yes, allow creation. If property.floors_in_scope is null or empty, you can either allow all floors (if that is the product rule) or show a message that the user should first save Floors in Scope. Prefer allowing creation when the floor is in floors_in_scope.
+
+4. **Load property with floors_in_scope:** Ensure the property loaded for the spaces page (and for the Create Space dialog) includes floors_in_scope from Supabase. If the dialog uses a stale or partial property object that does not have floors_in_scope, the validation will fail. After the user saves "Floors in Scope", refetch the property so that the next time they open Create Space, floors_in_scope is up to date.
+
+5. **Comparison:** When comparing the selected floor to floors_in_scope, use the same type and format (e.g. both strings). If floors are stored as ["4th"] but the dropdown value is 4 (number) or "4", the check will fail. Normalise or ensure the dropdown value is the same as the entries in floors_in_scope (e.g. both "4th").
+```
+
+**Quick check:** Save Floors in Scope with the 4th floor selected. Open Create Space, choose the 4th floor from the dropdown. Creation must succeed and must not show "you can only create space on your leased floors".
 
 ---
 
