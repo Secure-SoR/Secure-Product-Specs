@@ -1,6 +1,6 @@
 # Backend optimisations and UI implications
 
-This document lists **recommended optimisations** for the Secure SoR platform (Supabase backend) and the **implications for the Lovable UI**.
+This document lists **recommended optimisations** for the Secure SoR platform (Supabase backend) and the **implications for the Lovable UI**. For a concise **UI checklist** (what Lovable must do for each optimisation), see **§4 UI implications for backend optimisations (Lovable checklist)**.
 
 ---
 
@@ -155,7 +155,23 @@ There are indexes on `account_memberships(user_id)` and `account_memberships(acc
 
 ---
 
-## 4. Summary table
+## 4. UI implications for backend optimisations (Lovable checklist)
+
+When you implement the backend optimisations above, the **UI (Lovable)** should do the following. This is the single place to look for “what does the frontend need to change?”
+
+| Backend optimisation | What the UI must do (Lovable) |
+|----------------------|------------------------------|
+| **Composite indexes (Data Library, agent_runs)** | **No UI code change.** Queries stay the same; lists and filters just get faster. Optionally: add **filters** (e.g. by `subject_category`, date range) so the new indexes are used: `.eq('subject_category', category)`, `.gte('reporting_period_start', start).lte('reporting_period_end', end)`. |
+| **Pagination (records, audit, agent runs)** | **Add pagination and loading states.** (1) Use `.range(from, to)` (or cursor) in Supabase calls for Data Library list, Audit log, and Agent run history. (2) In the UI: show “Load more” or page numbers; show a **loading** state when fetching the next page. (3) Use a small first page size (e.g. 25–50) so first paint is fast. (4) If you add filters (category, date range), send them in the query so the backend returns only the needed rows. |
+| **RPC “records with evidence”** | **Switch context builder to use the RPC.** When the RPC exists: call it once (e.g. `supabase.rpc('get_property_records_with_evidence', { p_property_id: selectedPropertyId })`) and build the agent context from the result instead of separate fetches for records and evidence. No change to what the user sees; only fewer requests and faster “Run Data Readiness” etc. Optional: use the same RPC for a “Preview context” or “Validate before run” feature. |
+| **Select only needed columns** | **No new screens.** When you change queries from `.select('*')` to explicit columns, ensure list/table components only use the fields you now fetch (e.g. id, name, subject_category, reporting_period_start/end, confidence). If a component expects a column you dropped, add it back to the select or remove that dependency. |
+| **RLS / policy performance** | **No UI change.** Any future optimisation (e.g. stable function for account IDs) is server-side only. |
+
+**Summary:** The only backend optimisations that **require** UI work are **pagination** (add controls + loading) and **RPC for context** (call the RPC instead of multiple fetches). Indexes and tighter selects need no or minimal UI changes.
+
+---
+
+## 5. Summary table
 
 | Optimisation | Backend change | UI implication |
 |-------------|----------------|-----------------|
@@ -167,7 +183,7 @@ There are indexes on `account_memberships(user_id)` and `account_memberships(acc
 
 ---
 
-## 5. Suggested order of work
+## 6. Suggested order of work
 
 1. **Add the indexes** (Section 1) — low risk, immediate benefit for Data Library and agent runs.
 2. **Introduce pagination** in the UI and in the corresponding Supabase queries (Section 2.1) — prevents slow loads as data grows.
@@ -179,7 +195,7 @@ Context builder reference: `docs/step-by-step-evidence-in-context.md`, `docs/imp
 
 ---
 
-## 6. Agent-side optimisations (separate doc)
+## 7. Agent-side optimisations (separate doc)
 
 Optimisations for the **AI agents** (Data Readiness, Boundary, Action Prioritisation, Sustainability Reporting) — payload size, timeouts, context trimming, caching, validation, rate limiting — and their implications for the UI are documented in the **AI Agents** repo:
 
