@@ -88,6 +88,8 @@ Use these for dropdowns, filters, and agent context. **Emissions (scope-data)** 
 
 Evidence record types (Lovable) map to same categories: `energy`, `scope1`, `scope2`, `scope3`, `waste`, `water`, `governance`, `target`, `certificate`, `policy`, `general`.
 
+**Agent scope alignment:** The Data Readiness agent maps `subject_category` to Scope 1/2/3. For Scope 2 (energy) it recognizes: `energy`, `electricity`, `energy_utilities`, `heat`, `heating`, `district_heat`, `steam`, `cooling`, `service_charge_energy`, `service_charge`. If the app or imports use these values, no backend mapping change is needed — the agent will count them as Scope 2. Prefer the canonical `energy` for the main energy tile; use `electricity` / `heat` / `service_charge` if the UI differentiates them.
+
 ---
 
 ## Upload flow (backend)
