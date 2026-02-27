@@ -38,7 +38,7 @@ Full detail and SQL for Part 1 also lives in the AI Agents repo: `agent/docs/CHE
 
 ### Step 2.3 — Fetch evidence for those records
 
-- From Step 2.2 you have a list of record IDs (e.g. `dataLibraryRecords.map(r => r.id)`).
+- From Step 2.2 you have a list of record IDs (e.g. `dataLibraryRecords.map(r => r.id)`). This includes **all** records for the property (energy/Scope 2, water, waste, commuting, business travel, indirect_activities). Evidence must be fetched for **all** of them, not only waste or Scope 3.
 - Query **evidence_attachments** where `data_library_record_id` is in that list, and join **documents** to get the file name:
   - Option A: For each record id in the list, query `evidence_attachments` with `.in('data_library_record_id', recordIds)`, then for each attachment fetch the related `documents` row (by `document_id`) for `file_name`.
   - Option B: One query that returns attachment id, `data_library_record_id`, `document_id`, and `documents.file_name` (e.g. via a join or RPC).
