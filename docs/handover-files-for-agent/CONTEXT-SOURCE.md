@@ -28,7 +28,7 @@ Map DB column names to the agent's expected names (e.g. `system_category` → `c
 - `systems`: array of `{ id, category, controlledBy, meteringStatus, allocationMethod, servesSpaces }` (agent accepts `category`; DB has `system_category` + `system_type` — map when building context)
 - `nodes` (optional): array of `{ id, systemId, type, controlOverride, allocationWeight, spaceIds }`
 - `dataLibraryRecords`: array of `{ id, category, reportingYear, propertyId, confidenceLevel }` — use **subject_category** from DB as category (energy, water, waste, etc.). Emissions are never stored as records; they are derived.
-- `evidence`: array of `{ id, recordId, recordType, recordName, fileName }` (for display; agent may use for references)
+- `evidence`: array of `{ id, recordId, recordType, recordName, fileName }` — **recordId** must be the data_library_record id (UUID) so the agent can match evidence to records. Build from `evidence_attachments` + `documents` for the selected property’s records. See backend repo [step-by-step-evidence-in-context.md](../step-by-step-evidence-in-context.md).
 - Optional: `workforceDatasets`, `certificates` (can be empty arrays)
 - **Optional for coverage:** `propertyUtilityApplicability` (array of `{ component, applicability }` per property), `propertyServiceChargeIncludes` (e.g. `{ includesEnergy, includesWater, includesHeating }`) — see COVERAGE-AND-APPLICABILITY-FOR-AGENT.md
 

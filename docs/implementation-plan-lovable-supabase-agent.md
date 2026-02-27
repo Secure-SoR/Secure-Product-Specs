@@ -750,7 +750,7 @@ The agent expects a JSON body like the example in the AI Agents repo: `agent/con
 - `systems`: array of `{ id, category, controlledBy, meteringStatus, allocationMethod, servesSpaces }` (agent accepts `category`; DB has `system_category` + `system_type` — map when building context)
 - `nodes` (optional): array of `{ id, systemId, type, controlOverride, allocationWeight, spaceIds }`
 - `dataLibraryRecords`: array of `{ id, category, reportingYear, propertyId, confidenceLevel }` (and optionally more fields)
-- `evidence`: array of `{ id, recordId, recordType, recordName, fileName }` (for display; agent may use for references)
+- `evidence`: array of `{ id, recordId, recordType, recordName, fileName }` — **recordId** must be the **data_library_record.id** (UUID) so the agent can match evidence to records (e.g. for wasteRecordsWithEvidence). Build this from `evidence_attachments` + `documents` for the selected property’s records. See [step-by-step-evidence-in-context.md](step-by-step-evidence-in-context.md) for full implementation steps.
 - Optional: `workforceDatasets`, `certificates` (can be empty arrays)
 
 **ID format:** Agent is flexible. You can use Supabase UUIDs as `id` for spaces/systems and map `servesSpaces` / `spaceIds` to those same UUIDs (or to short ids like `sp-gf` if you store them). Keep `systemId` in nodes as the system’s `id` (UUID or string).
@@ -763,8 +763,8 @@ The agent expects a JSON body like the example in the AI Agents repo: `agent/con
      - `spaces` (by property_id)
      - `systems` (by property_id)
      - `end_use_nodes` (by property_id) if you have them
-     - `data_library_records` (by property_id or account)
-     - `evidence_attachments` + `documents` for those records (to build `evidence` list)
+     - `data_library_records` filtered by **property_id = selectedPropertyId** (data library is account-wide; send only this property’s records)
+     - `evidence_attachments` + `documents` for those records → build `evidence` with **recordId** = data_library_record_id (see [step-by-step-evidence-in-context.md](step-by-step-evidence-in-context.md))
    - Build the context object that matches the agent’s expected shape (map DB column names to the agent’s: e.g. `system_category` → `category`, `space_class` → `spaceClass`, `control` → same or map to tenant_controlled etc.).
    - Choose agent type: Data Readiness or Boundary (different endpoints or same endpoint with a type flag, depending on how you host the agent).
 2. **Call the agent**
