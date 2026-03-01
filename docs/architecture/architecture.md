@@ -115,24 +115,20 @@ These routes imply a full SoR system, but persistence does not match that ambiti
 
 ## 1.4 Persistence Model (Current)
 
-All state is stored in localStorage.
+SoR data (accounts, memberships, properties, spaces, systems, data library records, documents, evidence attachments) is now in **Supabase** (Postgres + Storage). Only **UI preferences** and **non-critical display state** (e.g. selected property ID, signup draft) remain in localStorage.
 
 ### Storage Scopes
 
 | Scope    | Description                                                                               |
 | -------- | ----------------------------------------------------------------------------------------- |
-| GLOBAL   | users, accounts, memberships, properties, governance, targets, evidence metadata, reports |
-| USER     | current user, current account id, signup draft                                            |
-| ACCOUNT  | selectedPropertyId, property draft                                                        |
-| PROPERTY | spaces, onboarding state                                                                  |
+| Supabase | users (Auth), accounts, account_memberships, properties, spaces, systems, data_library_records, documents, evidence_attachments |
+| localStorage | UI preferences, current account id (display), selectedPropertyId (display), signup draft, non-critical display state |
 
 ### Critical Observations
 
-* No server validation
-* No multi-tenant enforcement
-* No audit integrity
-* Editable via browser dev tools
-* Not suitable for audit-ready reporting
+* Supabase RLS enforces account-scoped access for SoR tables.
+* Document binaries are in Supabase Storage bucket `secure-documents`; metadata and evidence linking in Postgres.
+* Audit trail and agent run persistence are still to be implemented (see Gap Matrix).
 
 ---
 
@@ -160,25 +156,13 @@ Issues:
 
 ## 1.6 Upload Handling
 
-Multiple upload UI components exist:
+Uploads now go to **Supabase Storage** bucket `secure-documents`, with metadata and linking in Postgres:
 
-* Workforce upload
-* Certificate upload
-* Evidence upload
-* Bill upload
-* Landlord evidence
-* Policy upload
-* IoT upload
+* File is uploaded to the Storage bucket (path format: `account/{accountId}/property/{propertyId}/...`).
+* A row is inserted into `documents` (file name, storage path, etc.).
+* A row is inserted into `evidence_attachments` linking the document to a `data_library_record_id` when the upload is evidence for a data library record.
 
-All are:
-
-* Pure UI
-* No file storage
-* No binary handling
-* No upload progress
-* No storage backend
-
-There is currently **zero real document storage**.
+Upload UI components (workforce, certificate, evidence, bill, landlord evidence, policy, IoT) use this pipeline where implemented; remaining flows can be wired to the same pattern.
 
 ---
 
@@ -264,14 +248,14 @@ Onboarding must behave as a **state machine**, not just screens.
 
 | Capability         | Baseline Requirement           | Current Lovable Status | Gap                 |
 | ------------------ | ------------------------------ | ---------------------- | ------------------- |
-| Auth enforcement   | Secure auth + tenant isolation | LocalStorage only      | Not secure          |
-| SoR persistence    | DB-backed                      | LocalStorage           | Not authoritative   |
-| Documents stored   | Blob + metadata                | No storage             | Missing             |
-| Evidence linking   | record ↔ document              | metadata only          | Not audit-ready     |
+| Auth enforcement   | Secure auth + tenant isolation | Supabase Auth — Done   | —                   |
+| SoR persistence    | DB-backed                      | Supabase — Done        | —                   |
+| Documents stored   | Blob + metadata                | Supabase Storage + documents table — Done | — |
+| Evidence linking   | record ↔ document              | evidence_attachments — Done | —              |
 | Meter entity       | First-class CRUD               | Not standalone         | Structural gap      |
 | Agent runs         | Persisted with audit           | Display only           | Not traceable       |
 | Audit trail        | Immutable-ish                  | Local JSON             | Not trustworthy     |
-| Upload pipeline    | Signed upload flow             | Mock UI only           | Missing             |
+| Upload pipeline    | Signed upload flow             | Supabase Storage + documents/evidence_attachments — Done | — |
 | Landlord workflows | Persisted + secure             | Local only             | Not production-safe |
 
 ---
@@ -414,11 +398,11 @@ These rules must remain stable across migrations:
 
 **Step-by-step plan (Lovable + Supabase + agent):** See [Implementation plan: Lovable, Supabase, Agent](../implementation-plan-lovable-supabase-agent.md) for phased steps to wire account/membership, properties, spaces, systems, data library + uploads, and agent context.
 
-**Current state (Lovable):** The Lovable app now uses **Supabase Auth** for sign-up and sign-in (`useAuth` hook, `signUp`/`signInWithPassword`/`signOut`, `ProtectedRoute`, session from Supabase). User and profile are created via Supabase Auth + `handle_new_user` trigger. **Account and membership creation** still use localStorage; the next step is to write these to Supabase so the app can read/write account-scoped data (properties, systems, etc.) with RLS.
+**Current state (Lovable):** The Lovable app now uses **Supabase** for auth, accounts, memberships, properties, spaces, systems, data library records, and document uploads. **Supabase Auth** handles sign-up and sign-in; **accounts** and **account_memberships** are created and read from Supabase; **properties**, **spaces**, **systems**, **data_library_records** are stored in Supabase with RLS; **documents** and **evidence_attachments** are stored in Supabase (Storage bucket `secure-documents` + Postgres rows). Only UI preferences and non-critical display state (e.g. selected property ID) remain in localStorage.
 
 1. ~~Implement real authentication~~ — **Done (Supabase Auth in Lovable).**
-2. **Wire account + membership creation to Supabase** — After sign-up or onboarding, insert into `accounts` and `account_memberships` so the user can access account-scoped tables. (Requires RLS policy allowing authenticated users to INSERT into `accounts`; then INSERT into `account_memberships` with `user_id = auth.uid()`.)
-3. Implement real document storage
+2. ~~Wire account + membership creation to Supabase~~ — **Done.** Accounts and account_memberships are created and read from Supabase.
+3. ~~Implement real document storage~~ — **Done.** Uploads go to Supabase Storage bucket `secure-documents`; rows in `documents` and `evidence_attachments` link files to data library records.
 4. Make Meter a first-class entity
 5. Persist agent_runs and agent_findings
 6. Add audit_events
