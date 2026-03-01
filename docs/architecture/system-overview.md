@@ -7,4 +7,4 @@
 - [landlord-tenant-boundary-logic.md](./landlord-tenant-boundary-logic.md) — boundary and control rules
 - [data-confidence-and-risk-matrix.md](./data-confidence-and-risk-matrix.md) — data confidence and risk
 
-**Next steps (from architecture.md §8):** 1) Real auth → 2) Document storage → 3) Meter entity → 4) Persist agent_runs/agent_findings → 5) Audit events → 6) Remove localStorage as SoR.
+**Next steps (from architecture.md §8):** 1–3 Done (auth, account/membership, document storage). Next: 4) Meter entity → 5) Persist agent_runs/agent_findings → 6) Audit events → 7) Remove localStorage as SoR where applicable.

@@ -193,9 +193,9 @@ Three tabs:
 
 ## 7. Current Limitations (for backend)
 
-1. **Most record data is hardcoded mock** — no Supabase for energy, water, waste, certificates, ESG. Only Governance and Targets have localStorage CRUD.
-2. **Evidence is localStorage-only** — no Supabase Storage or file upload API.
-3. **"Add Data" actions are stubs.**
-4. **No per-property scoping** — property badge is display-only; records not filtered by selected property.
+1. **Record data** — Phase 1 Supabase is implemented for data_library_records (energy, water, waste, certificates, ESG, etc.) and Governance/Targets where wired.
+2. **Evidence** — Supabase Storage (bucket `secure-documents`) + `documents` + `evidence_attachments` are implemented; upload and link flow in place.
+3. **"Add Data" actions** — some may still be stubs; connect to create record + upload flow where needed.
+4. **Per-property scoping** — backend has `property_id`; list/filter by selected property when Lovable is ready.
 5. **No reporting period / date range filter** on sub-pages.
 6. **Scope data (emissions) is hardcoded** — no calculation engine.

@@ -27,14 +27,13 @@ This file is the authoritative architectural reference for Secure SoR.
 
   * React context (e.g., AuthContext, AccountContext)
   * Feature-level hooks
-* Persistence: **localStorage only**
+* Persistence: **Supabase** for SoR data (auth, accounts, memberships, properties, spaces, systems, data library, documents, evidence_attachments); **localStorage** for UI preferences and non-critical display state (see §1.4).
 
-  * Wrapper: `src/lib/storage.ts`
-  * Key registry: `src/lib/storageKeys.ts`
-* Seed logic: `PROPERTIES_SEED_VERSION`
+  * Supabase client for DB and Storage
+  * Optional wrapper: `src/lib/storage.ts` / `src/lib/storageKeys.ts` for remaining localStorage keys
+* Seed logic: `PROPERTIES_SEED_VERSION` (legacy; Supabase is source of truth for SoR)
 
-There is **no backend owned by this project**.
-The only network calls are to external AI agent endpoints.
+The app uses **Supabase** as its backend (Auth, Postgres, Storage). It also calls external AI agent endpoints.
 
 ---
 
@@ -412,11 +411,9 @@ These rules must remain stable across migrations:
 
 # 9. Conclusion
 
-Current Lovable implementation is a strong UI prototype but not yet a System of Record.
+Phase 1 (Supabase) is in place: auth, accounts, memberships, properties, spaces, systems, data library, document storage, and evidence linking use Supabase. Remaining gaps for full SoR include: Meter as first-class entity, persisted agent_runs/agent_findings, audit_events, and landlord workflows (see §3 Gap Matrix).
 
-The Supabase phase introduces real persistence and multi-tenant control.
-
-The Azure phase introduces enterprise-grade enforcement and infrastructure alignment.
+The Azure phase would introduce enterprise-grade enforcement and infrastructure alignment.
 
 This document is the architectural baseline for all future implementation decisions.
 

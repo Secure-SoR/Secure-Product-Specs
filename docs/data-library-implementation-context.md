@@ -24,7 +24,7 @@ Summary from both:
 - **Hub:** Three tabs — My Data (tile grid), Shared Data (table), Connectors (grid). "Add Data" dropdown: Connect Platform, Upload Documents, Manual Entry, Rule Chain.
 - **Subpages:** Generic table pattern (Water, Waste, Certificates, ESG, Indirect Activities) or custom (Energy, Scope data, Governance, Targets, Occupant Feedback). Table columns: Record Name, Ingestion Method, Confidence, Linked Report, Last Updated, Actions. **View** → drawer with Evidence & Attachments panel (upload + tags), Audit History.
 - **Record creation:** No universal form — Governance (dialog: category, title, status, responsible person), Targets (dialog: category, scope, baseline/target, unit, status), others currently mock/stub.
-- **Evidence:** Record-first, then attach files. One record → many files. Upload dialog: file (PDF/Excel/CSV/Images, max 10MB), **tag** (invoice, contract, methodology, certificate, report, other), optional description. Evidence is currently localStorage; backend will use Storage + `documents` + `evidence_attachments`.
+- **Evidence:** Record-first, then attach files. One record → many files. Upload dialog: file (PDF/Excel/CSV/Images, max 10MB), **tag** (invoice, contract, methodology, certificate, report, other), optional description. Evidence uses Supabase Storage (bucket `secure-documents`) + `documents` + `evidence_attachments` (implemented).
 - **Emissions:** Read-only calculated at `/data-library/scope-data` — never stored as primary records.
 
 ---
@@ -104,7 +104,7 @@ Evidence record types (Lovable) map to same categories: `energy`, `scope1`, `sco
 
 ### Limitations from Lovable spec (what to build)
 
-From [lovable-data-library-spec.md §7](sources/lovable-data-library-spec.md): (1) Most record data is hardcoded mock — wire generic and Energy categories to Supabase. (2) Evidence is localStorage-only — implement Storage + documents + evidence_attachments. (3) "Add Data" actions are stubs — connect Upload Documents / Manual Entry to create record + upload flow. (4) No per-property scoping — backend has `property_id`; list/filter by selected property when Lovable is ready. (5) No reporting period filter — backend has `reporting_period_start`/`_end`; add date range filter on sub-pages. (6) Scope data is hardcoded — emissions remain calculated elsewhere; do not store as Data Library records.
+From [lovable-data-library-spec.md §7](sources/lovable-data-library-spec.md): (1) Record data and (2) Evidence (Storage + documents + evidence_attachments) are now Supabase-backed (Phase 1 done). (3) "Add Data" actions — connect Upload Documents / Manual Entry to create record + upload flow where not yet wired. (4) Per-property scoping — backend has `property_id`; list/filter by selected property. (5) No reporting period filter — backend has `reporting_period_start`/`_end`; add date range filter on sub-pages. (6) Scope data (emissions) is calculated elsewhere; do not store as Data Library records.
 
 ---
 
