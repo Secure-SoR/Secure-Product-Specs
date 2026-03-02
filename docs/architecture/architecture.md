@@ -39,20 +39,17 @@ The app uses **Supabase** as its backend (Auth, Postgres, Storage). It also call
 
 ## 1.2 Routes (UI Surface Map)
 
+**Entry and auth flow (canonical):** Public **Landing Page** at `/` (when not logged in) → **Sign in** → Login/Signup → after auth → **Dashboard** (platform home). Logged-in users visiting `/` are redirected to Dashboard. All app routes below are behind auth. **Single source of truth:** [docs/APP-ROUTE-MAP.md](../APP-ROUTE-MAP.md).
+
 * ~67 routes total (62 pages + 5 redirects)
 * Major sections:
 
-  * Auth (SignIn, SignUp)
-  * Account Settings
-  * Property & Onboarding
-  * Spaces & Systems
-  * Data Library (subject-based)
-  * Reports
-  * Dashboards (Energy, Carbon, Risk, etc.)
-  * Landlord Portal
-  * IoT / Device pages
-  * Governance & Targets
-  * Surveys & Feedback
+  * **Public:** Landing Page (`/` when not authenticated)
+  * **Auth:** Login, SignUp (e.g. `/login`, `/signup`) — from Landing "Sign in"; after success → Dashboard
+  * **App (authenticated):** Dashboard (platform home), Account Settings, Property & Onboarding, Spaces & Systems
+  * Data Library (subject-based): `/data-library`, `/data-library/energy`, etc. (see [sources/lovable-data-library-spec.md](../sources/lovable-data-library-spec.md) §2.3)
+  * Reports, Dashboards (Energy, Carbon, Risk, etc.), Landlord Portal
+  * IoT / Device pages, Governance & Targets, Surveys & Feedback
 
 These routes imply a full SoR system, but persistence does not match that ambition.
 
