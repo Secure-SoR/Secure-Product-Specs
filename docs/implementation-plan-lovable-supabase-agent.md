@@ -373,9 +373,20 @@ Under Spaces, add a "Create the spaces" flow that builds spaces dynamically and 
 
 ---
 
+## Physical and Technical — Two tiles: Construction & Envelope + Building systems
+
+The **Physical and Technical** area (e.g. under a property or in onboarding) must show **two** tiles or sections:
+
+1. **Construction & Envelope** — Building fabric, envelope, EPC-related data (e.g. construction type, façade, insulation, EPC certificate). This is separate from systems.
+2. **Building systems** — The systems taxonomy and register (Power, HVAC, Lighting, etc.) as in the section below.
+
+If the app currently shows only "Building systems", the **Construction & Envelope** tile was likely removed or merged by mistake (e.g. during a refactor or the public landing page work). Restore it so both tiles are visible and accessible. Use the Lovable prompt in [docs/LOVABLE-PROMPT-RESTORE-CONSTRUCTION-ENVELOPE-TILE.md](LOVABLE-PROMPT-RESTORE-CONSTRUCTION-ENVELOPE-TILE.md) to restore the Construction & Envelope tile.
+
+---
+
 ## Physical and Technical page — Building Systems (taxonomy + register)
 
-The **Physical and Technical** page hosts **building systems**. The UI must follow the **Building Systems Taxonomy** (categories and system types) and support all data fields from the **Building Systems Register** so users can create and edit systems that match the register, save them to Supabase, and later add **nodes** linked to systems.
+The **Building systems** tile/section hosts **building systems**. The UI must follow the **Building Systems Taxonomy** (categories and system types) and support all data fields from the **Building Systems Register** so users can create and edit systems that match the register, save them to Supabase, and later add **nodes** linked to systems.
 
 **References:**
 - [building-systems-taxonomy.md](../data-model/building-systems-taxonomy.md) — system categories and system types per category.

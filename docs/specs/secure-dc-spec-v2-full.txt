@@ -1,0 +1,704 @@
+
+SECURE SoR
+Data Centre Asset Type
+Product Specification for Cursor
+
+Status
+DRAFT v1.0
+Date
+March 2026
+Owner
+Anne
+Repo
+Secure-SoR-backend
+
+
+  0. Executive Summary  
+
+This specification defines the changes and additions required to extend Secure SoR to support Data Centres as a first-class asset type. It covers three distinct areas:
+
+	•	Asset type template: property and space creation adapted for data centre topology (halls, suites, white floor, plant rooms, PODs)
+	•	Dashboards: a new Data Centre Asset Manager dashboard set covering PUE, energy intensity, capacity, cooling, water, and ESG metrics
+	•	SitDeck integration: connecting Secure SoR to the SitDeck DCIM platform (https://app.sitdeck.com) for operational telemetry, rack/device data, and real-time metering
+
+This spec is structured for direct handoff to Cursor. Each section includes: what to build, how it differs from the existing office/retail model, exact schema changes, UI components, and integration contracts.
+
+  1. Context & Strategic Fit  
+1.1  Why Data Centres
+Data centres are one of the most complex real estate asset types for sustainability and operational data management. They are:
+	•	Energy-intensive: a single hyperscale facility can consume 50–200 MW
+	•	Metering-rich: extensive submeter networks already exist but data is fragmented across DCIM, BMS, and FM systems
+	•	Regulation-exposed: EU Energy Efficiency Directive, SEC climate disclosure, and emerging DC-specific reporting requirements
+	•	Capital-markets relevant: DC valuations are increasingly tied to PUE, Renewable Energy Credits (RECs), and transition risk
+
+Secure's System of Record architecture — asset-level data model, evidence chains, audit trail, AI agents — maps directly onto the data governance needs of DC asset managers and owners.
+1.2  Who Uses This
+Primary user
+Asset Manager / Owner of one or more data centres
+Secondary user
+Sustainability / ESG team producing GRESB, SFDR, or SEC reports
+Third user
+Operations team monitoring PUE, capacity, and critical plant
+Account type
+asset_manager (existing) — no new account type needed
+Asset type (new)
+data_centre — added to asset_type enum in properties table
+1.3  Relationship to Existing Architecture
+The canonical Secure SoR layers remain unchanged. Data Centre is an additive asset type template that:
+	•	Reuses: properties, spaces, systems, meters, data_library_records, evidence_attachments, agent_runs, audit_events
+	•	Extends: asset_type enum, building_systems_taxonomy, space templates, dashboard module, agent context
+	•	Adds: dc_metadata table (PUE targets, tier level, design capacity), dc_rack_assets table (SitDeck sync), new dashboard pages
+
+  2. Property Creation — Data Centre Template  
+2.1  What Changes at Property Level
+Property creation today uses a generic form (name, address, asset_type, NLA, year_built etc.). When asset_type = 'data_centre', a second step must appear: the Data Centre Metadata form.
+
+Everything in the core properties table stays the same. The DC-specific fields live in a new table: dc_metadata (one row per property).
+2.2  Schema: dc_metadata
+Column
+Type
+Nullable
+Description
+id
+uuid PK
+NO
+Auto-generated
+account_id
+uuid FK → accounts
+NO
+RLS scope
+property_id
+uuid FK → properties UNIQUE
+NO
+One row per property
+tier_level
+text (I|II|III|IV)
+YES
+Uptime Institute Tier
+design_capacity_mw
+numeric
+YES
+Total IT load capacity (MW)
+current_it_load_mw
+numeric
+YES
+Live or last-known IT load (MW)
+total_white_floor_sqm
+numeric
+YES
+Total raised floor / white floor area
+cooling_type
+text[]
+YES
+air_cooled | liquid_cooled | hybrid | free_cooling
+power_supply_redundancy
+text (N|N+1|2N|2N+1)
+YES
+UPS/power redundancy class
+target_pue
+numeric
+YES
+Design or target PUE (e.g. 1.3)
+renewable_energy_pct
+numeric
+YES
+% of power from renewables (0–100)
+water_usage_effectiveness_target
+numeric
+YES
+Target WUE (L/kWh)
+certifications
+text[]
+YES
+ISO 50001 | ISO 14001 | LEED | BREEAM | EU CoC
+sitdeck_site_id
+text
+YES
+SitDeck site identifier for API sync
+created_at
+timestamptz
+NO
+
+updated_at
+timestamptz
+NO
+
+
+RLS: account-scoped (same pattern as all other tables). Migration file: add-dc-metadata.sql.
+2.3  UI: Property Creation Flow for Data Centres
+Step 1 (unchanged): Core property form — name, address, asset_type = 'data_centre', country, year_built, operational_status.
+
+Step 2 (NEW — conditional on asset_type = data_centre): Data Centre Details form.
+
+Field
+UI control
+Tier Level
+Select: Tier I / II / III / IV
+Design Capacity (MW)
+Number input
+Total White Floor (sqm)
+Number input
+Cooling Type
+Multi-select: Air | Liquid | Hybrid | Free Cooling
+Power Redundancy
+Select: N / N+1 / 2N / 2N+1
+Target PUE
+Number input (e.g. 1.3)
+Renewable Energy %
+Slider 0–100%
+WUE Target
+Number input (L/kWh)
+Certifications
+Multi-select checkbox: ISO 50001, ISO 14001, LEED, BREEAM, EU CoC
+SitDeck Site ID
+Text input (optional — used for integration)
+
+Save action: INSERT into dc_metadata linked to the new property_id. This step is skippable (all fields nullable) — user can complete later from the property settings page.
+
+  3. Space Creation — Data Centre Template  
+3.1  Data Centre Space Topology
+Data centres have a fundamentally different space hierarchy to offices. The canonical topology is:
+
+Level
+space_class
+Space type examples
+control
+Facility / Site
+base_building
+Site boundary, external plant yard
+landlord_controlled
+Building shell
+base_building
+Building envelope, loading bay, security
+landlord_controlled
+White Floor / Hall
+tenant
+Hall A, Hall B, Data Hall 1
+tenant_controlled
+Data Suite / Zone
+tenant
+Suite 1A, Zone North, Cage area
+tenant_controlled
+POD / Row
+tenant
+POD-01, Row 12, Hot aisle 3
+tenant_controlled
+Mechanical plant
+base_building
+CW plant room, generator room, UPS room
+landlord_controlled
+Electrical plant
+base_building
+HV room, LV switchroom, transformer room
+landlord_controlled
+Office / NOC
+base_building
+Network Operations Centre, security office
+landlord_controlled
+Cooling zone
+base_building
+Cooling tower yard, CRAC/CRAH room
+landlord_controlled
+
+Hierarchy: Building → Hall/Data Floor → Suite → POD/Row. Mechanical and electrical plant rooms are always base_building, landlord_controlled.
+3.2  Space Template: Data Centre
+When creating spaces for a data_centre property, offer a 'Use Data Centre Template' button that pre-populates the standard space tree. Cursor should implement this as a seed function triggered from the spaces onboarding step.
+
+Default template spaces (user edits names/areas):
+	•	Hall A — space_class: tenant, control: tenant_controlled, space_type: data_hall
+	•	Suite 1 — space_class: tenant, control: tenant_controlled, space_type: data_suite
+	•	Suite 2 — space_class: tenant, control: tenant_controlled, space_type: data_suite
+	•	Hall B — space_class: tenant, control: tenant_controlled, space_type: data_hall
+	•	Mechanical Plant Room — space_class: base_building, control: landlord_controlled, space_type: plant_room
+	•	Electrical Plant Room — space_class: base_building, control: landlord_controlled, space_type: plant_room
+	•	Cooling Plant — space_class: base_building, control: landlord_controlled, space_type: cooling_plant
+	•	Network Operations Centre — space_class: base_building, control: landlord_controlled, space_type: office
+
+3.3  New space_type Values for Data Centres
+Add these to the space_type enum / documentation (no DB constraint change needed — space_type is free text):
+
+space_type value
+Description
+data_hall
+Primary raised-floor data hall / white floor
+data_suite
+Sub-division of a hall (caged or open)
+data_pod
+Pre-fabricated or modular POD
+data_row
+Row within a hall or suite
+plant_room
+Mechanical or electrical plant room
+cooling_plant
+Cooling tower yard, CRAC/CRAH room
+ups_room
+UPS / battery room
+generator_room
+Diesel or gas generator room
+hv_room
+High voltage switchroom
+lv_room
+Low voltage switchroom
+loading_bay
+Loading / receiving area
+security_gatehouse
+Security post
+noc
+Network Operations Centre
+meet_me_room
+Cross-connect / colocation meet-me room
+3.4  In-Scope Area for Data Centres
+For data centres, in_scope_area on the property represents total IT-usable white floor area (sqm). The spaces subpage should display this as 'White Floor in Scope' rather than generic 'Floors in Scope'. No schema change — just UI label adjustment conditional on asset_type = data_centre.
+
+  4. Building Systems — Data Centre Taxonomy Extension  
+4.1  New System Categories for Data Centres
+The existing taxonomy (Power, HVAC, Lighting, PlugLoads, Water, Waste, BMS, Lifts, Monitoring) covers most data centre needs. The following system types must be added under existing categories:
+
+Power (existing category — new types)
+systemType
+Description
+HV_Intake
+High voltage intake and transformation
+UPS_System
+Uninterruptible Power Supply (one or more units)
+PDU_Unit
+Power Distribution Unit serving racks
+Generator_Set
+Backup diesel/gas generator
+StaticTransfer_Switch
+Automatic transfer switch
+BusBars
+Busbar trunking distribution
+REC_Meter
+Renewable Energy Certificate tracking meter
+
+HVAC / Cooling (existing category — new types)
+systemType
+Description
+CRAC_Unit
+Computer Room Air Conditioning unit
+CRAH_Unit
+Computer Room Air Handler unit
+Chiller_Plant
+Chiller or chiller group
+CoolingTower
+Evaporative cooling tower
+AdiabatiCooler
+Adiabatic / evaporative pre-cooler
+LiquidCooling_Rack
+Direct liquid cooling at rack level
+ImmersionCooling
+Single/two-phase immersion cooling
+HotAisleColdAisle
+Hot/cold aisle containment system
+FreeAirCooling
+Economiser / free-air cooling system
+CRAC_EC_Fan
+EC fan upgrade on CRAC/CRAH
+
+Monitoring (existing category — new types)
+systemType
+Description
+DCIM_Platform
+Data Centre Infrastructure Management (e.g. SitDeck)
+PUE_Meter
+Dedicated PUE monitoring system
+TemperatureHumidity_Sensor
+Environmental sensors (hot/cold aisle)
+Power_Chain_Monitor
+Real-time power chain monitoring (UPS → PDU → rack)
+WaterMeter_DC
+Cooling water consumption meter
+RackPowerMeter
+Per-rack or per-PDU outlet power meter
+
+Water (existing category — new types)
+systemType
+Description
+MakeupWater_Meter
+Cooling tower make-up water meter
+TotalWater_Meter
+Facility-level water consumption meter
+4.2  Key Metrics from Systems
+These are the operational KPIs that the systems taxonomy must support for the DC dashboard:
+
+Metric
+Derived from / systems
+PUE (Power Usage Effectiveness)
+Total facility power ÷ IT load power (UPS_System + PDU_Unit readings)
+WUE (Water Usage Effectiveness)
+Annual water use (L) ÷ IT energy (kWh) — from WaterMeter_DC
+IT Load (MW)
+Sum of PDU / rack meter readings
+Cooling Energy (MWh)
+CRAC/CRAH + Chiller + Cooling Tower energy readings
+Power Chain Loss
+HV_Intake → UPS → PDU → rack delta
+Capacity Utilisation %
+Current IT load ÷ Design capacity × 100
+Renewable %
+From REC_Meter or manual entry in data library
+Carbon intensity (kgCO2e/kWh)
+Grid factor × total energy (from Emissions Engine)
+
+  5. Data Centre Dashboards  
+5.1  Dashboard Architecture
+Data centre dashboards are a new module alongside the existing Energy, Carbon, Risk, and Governance dashboards. They are available only when account has at least one property with asset_type = 'data_centre'.
+
+Routes:
+	•	/dashboards/data-centre — Portfolio overview (all DC properties)
+	•	/dashboards/data-centre/:propertyId — Single DC property view
+	•	/dashboards/data-centre/:propertyId/pue — PUE deep-dive
+	•	/dashboards/data-centre/:propertyId/capacity — Capacity and power chain
+	•	/dashboards/data-centre/:propertyId/cooling — Cooling and water
+	•	/dashboards/data-centre/:propertyId/esg — ESG and reporting readiness
+5.2  Dashboard 1: Portfolio Overview
+Audience: Asset manager with 2+ data centres. Answers: how is the portfolio performing vs PUE targets? Where are the risks?
+
+KPI Tile
+Data source
+Portfolio PUE (avg + range)
+Aggregated from property-level data_library_records or SitDeck sync
+Total IT Load (MW)
+Sum across properties
+Total Energy (MWh) YTD
+Sum from data_library_records — energy subject_category
+Renewable Energy % (avg)
+From dc_metadata.renewable_energy_pct or data library RECs
+Carbon Intensity (kgCO2e/kWh)
+Emissions Engine output
+Properties at PUE risk
+Where actual PUE > target_pue + 0.1
+Capacity Utilisation (avg)
+current_it_load ÷ design_capacity per property
+Data coverage score
+CoverageEngine — Complete / Partial / Unknown per property
+
+Chart: PUE trend line by property (12-month rolling). Table: property list with PUE, load, renewable %, coverage status, last updated.
+5.3  Dashboard 2: Single DC Property — Overview
+Six KPI tiles (top row), then tabbed detail below.
+
+Tile
+Metric
+Live PUE
+From SitDeck or latest data library record — with trend indicator
+IT Load
+MW — current vs design capacity
+Total Energy
+MWh YTD with year-on-year delta
+Cooling Energy
+MWh YTD + % of total energy
+Water (WUE)
+L/kWh — actual vs target
+Renewable %
+% of power from renewables — vs target
+5.4  Dashboard 3: PUE Deep-Dive
+This is the most critical DC-specific dashboard. PUE = Total Facility Power / IT Load Power.
+
+	•	Time series chart: PUE by day / week / month — with target PUE overlay
+	•	PUE component waterfall: IT load → UPS losses → PDU losses → cooling → lighting → other
+	•	Temperature correlation: PUE vs external OAT (if SitDeck provides weather correlation)
+	•	Annualised PUE: rolling 12-month vs prior year
+	•	PUE benchmark: vs Tier level norms (Tier III target ~1.4, best-in-class ~1.2)
+
+Data sources: dc_metadata.target_pue, data_library_records for energy readings, SitDeck sync for live/recent telemetry.
+5.5  Dashboard 4: Capacity & Power Chain
+Audience: operations team and asset manager assessing utilisation and headroom.
+
+	•	Capacity gauge: current IT load (MW) as % of design capacity — traffic light colouring
+	•	Power chain diagram: HV intake → UPS → busbars → PDU → rack (losses at each stage)
+	•	Hall-level breakdown: capacity utilisation per data hall / suite
+	•	Redundancy view: N / N+1 / 2N status per power path
+	•	Forecast: capacity depletion date based on load growth trend (simple linear extrapolation)
+5.6  Dashboard 5: Cooling & Water
+	•	Cooling energy breakdown: CRAC/CRAH + chiller + cooling tower + free cooling share
+	•	WUE trend: Water Usage Effectiveness by month — vs target
+	•	Cooling efficiency: kW of cooling per kW of IT load
+	•	Free cooling hours: % of hours operating in economiser mode (if available from BMS/SitDeck)
+	•	Water consumption absolute: m³/year with year-on-year delta
+	•	Make-up water: volume added to cooling towers (evaporation + blowdown proxy)
+5.7  Dashboard 6: ESG & Reporting Readiness
+Maps onto existing Secure ESG architecture. Data centre-specific additions:
+
+	•	GRESB Data Centre module readiness score (energy, GHG, water, waste — DC-specific questions)
+	•	EU Energy Efficiency Directive (EED) Article 12 reporting fields: IT capacity, PUE, temperature, reuse of heat
+	•	Renewable energy: % from direct PPAs, RECs/GOs, grid tariff — breakdown
+	•	Scope 2 (market-based): based on REC/GO matched energy
+	•	Scope 2 (location-based): based on grid factor × total consumption
+	•	Data quality: evidence coverage per KPI — Complete / Partial / Unknown from CoverageEngine
+
+  6. SitDeck OSINT Integration  
+6.1  What SitDeck Is
+SitDeck (https://sitdeck.com) is an Open-Source Intelligence (OSINT) dashboard platform. It aggregates 180+ live data providers across conflicts, geopolitical events, natural hazards, cyber threats, climate, weather, maritime, and markets onto a single customisable dashboard with 55+ drag-and-drop widgets and a 65-layer interactive world map. All data is sourced from free, publicly available feeds — government agencies, international organisations, and research institutions — with sub-minute refresh on critical feeds.
+SitDeck is not a DCIM or energy monitoring tool. It is a situational intelligence layer. For Secure, it serves the Owner/Landlord account profile (the BMO use case) — an asset owner managing data centres as capital investments who needs to understand physical, geopolitical, and climate threats to those assets in real time, not just their operational performance.
+6.2  Account Profile: Owner/Landlord (BMO Type)
+The Owner/Landlord account type owns data centres as capital assets — typically an institutional investor, sovereign wealth fund, REIT, or infrastructure manager. Their primary concern is asset value preservation, risk-adjusted return, and regulatory disclosure. They are not running the facility day-to-day; they are making hold/sell/invest decisions and answering to lenders, insurers, and reporting frameworks (TCFD, SFDR, GRESB). SitDeck live intelligence is directly relevant to this profile for four reasons:
+	•	Data centres are now military and geopolitical targets. AI infrastructure is critical to military operations; data centres in proximity to conflict zones, adversarial states, or critical national infrastructure corridors face materially different risk profiles than five years ago.
+	•	Physical climate risk is immediate, not theoretical. Flood, wildfire, and extreme weather events near data centre assets are live events, not only long-term modelled scenarios. Owners need both real-time awareness and historical event evidence for insurance and TCFD disclosure.
+	•	Lenders and insurers are asking. Physical and geopolitical risk is now a standard line item in DC acquisition due diligence, debt covenants, and ESG ratings. Secure’s audit trail means SitDeck-sourced risk events become documented evidence, not just situational awareness.
+	•	The dashboards already proposed in Section 5 cover operational and ESG performance. SitDeck adds a real-world intelligence layer on top: the world outside the facility that affects the asset’s risk profile and value. The integration bridges operational data (Section 5) with external threat intelligence (Section 6).
+6.3  New Dashboards: SitDeck Intelligence Layer
+Three new dashboards are proposed for the Owner/Landlord profile, powered by live SitDeck feeds. These sit alongside the operational dashboards in Section 5 under a new “Risk Intelligence” tab in the Secure DC dashboard set. Routes:
+	•	/dashboards/data-centre/:propertyId/geopolitical — Geopolitical & Conflict Risk
+	•	/dashboards/data-centre/:propertyId/climate-hazard — Climate & Natural Hazard Risk
+	•	/dashboards/data-centre/:propertyId/cyber-infrastructure — Cyber & Critical Infrastructure Risk
+6.4  Dashboard A: Geopolitical & Conflict Risk
+Audience: Asset owner and investment committee. Strategic question: is the asset in a geography whose risk profile has materially changed — and does that affect hold/sell/hedge decisions?
+Context: Data centres are AI infrastructure. State and non-state actors have demonstrated intent and capability to target digital infrastructure as part of military and hybrid warfare campaigns. A hyperscale DC is both a strategic asset and a strategic target. The owner of such an asset needs live geopolitical intelligence mapped against their portfolio — not a quarterly risk report.
+SitDeck Widget / Feed
+What It Shows in Secure (Owner/Landlord Lens)
+Active Conflicts Map
+World map centred on the property with live conflict zone overlays. Shows distance of active conflict events from the asset. Triggers a risk flag if a conflict event is logged within a configurable radius (e.g. 500km)
+Military & Defense Activity Feed
+Live military activity events in the asset’s region. DC owners with assets in EMEA or APAC need awareness of escalating military posture near critical infrastructure corridors. Feeds the Risk Diagnosis ‘geopolitical’ domain
+Geopolitical Risk Index
+Country-level political risk score for the jurisdiction the asset sits in. Trend over 12 months. Relevant for SFDR PAI disclosures and lender ESG questionnaires asking about ‘country risk’
+AI Analyst Alert (SitDeck)
+SitDeck’s AI Analyst surfaces sourced intelligence answers cross-referenced against live feeds. Secure surfaces the most recent AI-generated situation report for the asset’s country/region as a tile, with a link to SitDeck for full detail
+Audit trail behaviour: When a conflict event or geopolitical alert is flagged within the configured radius of an asset, Secure writes an agent_finding with finding_type = ‘geopolitical_alert’, source = ‘sitdeck’, and a timestamped evidence reference. This creates a permanent audit record that the risk event was detected, visible during due diligence and regulatory review.
+6.5  Dashboard B: Climate & Natural Hazard Risk
+Audience: Asset owner, sustainability team, insurers. Strategic question: are there live or recent physical hazard events near the asset that affect its insurance profile, TCFD disclosure, or operational continuity?
+Context: Data centres are energy-intensive and physically fixed. Flood is the most acute threat — cooling systems, UPS, and generators are typically at ground level or in basements. Wildfire creates air quality issues affecting CRAC/CRAH intake filters and cooling efficiency. Extreme heat drives cooling load and PUE degradation. All of these are live, trackable events available via SitDeck from USGS, NOAA, and equivalent agencies.
+SitDeck Widget / Feed
+What It Shows in Secure (Owner/Landlord Lens)
+Flood & River Monitoring (USGS / EA)
+Live flood alert status for the asset location. Alert level tile (None / Watch / Warning / Emergency) with trend. Triggers an agent_finding when alert level rises. Permanent record of all flood warnings within configurable radius — used for insurance renewal and TCFD acute physical risk disclosures
+Wildfire Perimeter Tracker (NASA FIRMS)
+Live wildfire detection points near the asset. Relevant for assets in southern Europe, western US, or Australia. Smoke intrusion affects CRAC filter life and cooling efficiency — correlates with operational impact on the PUE dashboard in Section 5
+Extreme Weather Alerts (NOAA / Met Office)
+Heat wave, severe storm, and wind alerts for the asset location. High temperatures directly drive PUE degradation; storms affect generator fuel logistics and physical plant integrity. Alert events logged as agent_findings for TCFD reporting
+Earthquake / Seismic Monitor (USGS)
+Recent seismic activity within 300km of the asset. Critical for assets in seismic zones (APAC, southern Europe, western US). Magnitude threshold alerting: events above M4.0 trigger an agent_finding. Relevant for structural insurance and Tier certification compliance in seismic zones
+Risk Event History Log
+Append-only log of all SitDeck-sourced hazard events that breached alert thresholds for this property, with date, event type, severity, source, and the Secure agent_finding reference. This is the asset’s physical risk evidence record — directly usable in TCFD disclosure and GRESB physical risk assessments
+6.6  Dashboard C: Cyber & Critical Infrastructure Risk
+Audience: Asset owner, risk committee, IT/security function. Strategic question: is the digital and energy infrastructure the asset depends on under active threat — and has that threat been documented?
+Context: Data centres are critical national infrastructure in most jurisdictions. CISA, NCSC, and equivalent agencies publish real-time advisories on threats to digital infrastructure. A DC owner needs to know when the sector their asset sits in is under active cyber campaign, grid attack, or supply chain compromise — even if their specific facility is not directly targeted. SitDeck aggregates CISA, NATO, and equivalent feeds directly.
+SitDeck Widget / Feed
+What It Shows in Secure (Owner/Landlord Lens)
+CISA Advisories & Known Exploited Vulnerabilities
+Live feed of CISA advisories tagged to critical infrastructure sectors. Secure filters for energy and digital infrastructure advisories and surfaces the most recent as a tile. Advisories targeting data centre BMS, UPS, or DCIM vendors are flagged as high priority
+Power Grid & Energy Infrastructure Incidents
+Grid stability and energy infrastructure attack events in the asset’s country or region. Grid attacks have directly preceded DC outages in EMEA conflict zones. Validates the importance of N+1/2N redundancy and on-site generation documented in dc_metadata
+Daily Intelligence Briefing (SitDeck AI)
+SitDeck’s AI-generated morning briefing covering cyber, security, and climate categories — surfaced as a daily tile in the Secure dashboard for the asset’s region. Provides the owner with a consolidated intelligence digest without leaving the Secure interface
+Audit trail behaviour: CISA advisory events and grid incident events that match the asset’s sector and region are written as agent_findings with finding_type = ‘cyber_advisory’ or ‘infrastructure_incident’. These create a documented record of sector-level threats at a point in time, relevant for cyber insurance, lender security questionnaires, and SFDR PAI disclosure on cyber exposure.
+6.7  Integration Architecture
+SitDeck provides 180+ live data feeds via its platform. Secure does not replicate SitDeck data — it embeds SitDeck widgets (iframe or JS SDK) directly into the dashboard views, anchored to the property’s lat/lng coordinates. Structured risk events (threshold alerts that breached) are pulled via SitDeck custom alerts webhook and written to Secure’s agent_findings and audit_events tables.
+Parameter
+Detail
+Widget rendering
+Embedded iframe or JS SDK from SitDeck, rendered inside Secure dashboard panels. The user’s SitDeck session determines which widgets and layers are active — Secure passes the property lat/lng as the map centre point. Confirm embed method with SitDeck before build
+Auth
+SitDeck account token stored in Supabase secrets. One token per Secure account (not per property). All DC properties under the account share the same SitDeck connection
+Alert-to-finding pipeline
+SitDeck custom alerts (keyword or threshold-triggered, delivered by webhook) POST to a Secure Edge Function endpoint. The function writes an agent_finding and an audit_event. This is how live intelligence becomes audit-ready evidence in Secure’s SoR
+Location input
+Property lat/lng from the properties table, passed to SitDeck widget as map centre. Add lat/lng columns to property creation form if not already present (required for this integration to function)
+SitDeck plan requirement
+Core widget functionality available on SitDeck Hobbyist (free) plan. Custom alerts with webhook delivery require a paid SitDeck plan. Confirm alert/webhook tier pricing with SitDeck before committing the alert-to-finding pipeline to clients
+
+
+  7. AI Agents — Data Centre Extensions  
+7.1  Existing Agents — DC Context
+The two existing agents (Data Readiness, Boundary) must be extended to handle data centre context:
+
+	•	Data Readiness Agent: add PUE, WUE, capacity, and cooling as new KPIs to assess. Check for SitDeck connection. Flag if no PUE data present.
+	•	Boundary Agent: data centres have different boundary rules — IT load is always tenant; facility power includes shared services (cooling, lighting, security). The agent must understand the DC boundary model.
+7.2  New Agent: PUE & Efficiency Advisor
+A new agent specific to data centres. Triggered from the PUE dashboard or manually.
+
+Agent name
+PUE & Efficiency Advisor
+Trigger
+Manual from DC dashboard, or when PUE reading > target + threshold
+Input context
+dc_metadata, recent dc_sensor_readings, data_library_records (energy), tier_level, cooling_type
+Output 1
+Executive summary: current vs target PUE, trend direction
+Output 2
+Identified inefficiencies: which component is driving excess PUE
+Output 3
+Recommendations: cooling setpoint, containment, free cooling opportunity, load consolidation
+Output 4
+Evidence gaps: what data is missing to give a fully defensible PUE number
+Output 5
+Next actions: owner, due date, estimated PUE impact
+Confidence
+Based on data confidence: measured SitDeck data = High; manual = Moderate; estimated = Low
+7.3  Agent Context Shape Extension
+When building context for DC properties, Lovable must add these fields to the existing agent context JSON:
+
+	•	dcMetadata: { tierLevel, designCapacityMw, currentItLoadMw, targetPue, coolingType, wueTarget, renewableEnergyPct, sitdeckSiteId }
+	•	recentSensorReadings: last 7-day summary { avgPue, avgItLoadMw, avgTotalPowerMw, avgTempCelsius } — from dc_sensor_readings rollup
+	•	rackSummary: { totalRacks, avgUtilisationPct, totalDesignKw, totalCurrentKw } — from dc_rack_assets
+	•	syncStatus: { lastSyncAt, status } — from dc_sync_log
+
+  8. Implementation Plan for Cursor  
+8.1  Phase 1 — Asset Type & Schema (Week 1–2)
+	•	Add 'data_centre' to asset_type handling (properties table — no constraint change needed, asset_type is free text)
+	•	Create migration: add-dc-metadata.sql (dc_metadata table + RLS)
+	•	Create migration: add-dc-rack-assets.sql (dc_rack_assets + RLS)
+	•	Create migration: add-dc-sensor-readings.sql (dc_sensor_readings + RLS)
+	•	Create migration: add-dc-sync-log.sql (dc_sync_log)
+	•	Update property creation flow: conditional DC Details step when asset_type = data_centre
+	•	Update space creation: DC template button + new space_type values
+	•	Update building systems taxonomy documentation with DC system types
+8.2  Phase 2 — Dashboards (Week 2–4)
+	•	Create /dashboards/data-centre portfolio overview page
+	•	Create /dashboards/data-centre/:propertyId overview with 6 KPI tiles
+	•	Create PUE deep-dive tab/page
+	•	Create Capacity & Power Chain tab
+	•	Create Cooling & Water tab
+	•	Create ESG & Reporting Readiness tab
+	•	Wire dashboards to data_library_records and dc_metadata (not SitDeck yet)
+8.3  Phase 3 — SitDeck Integration (Week 3–5)
+	•	Build SitDeck connection UI (Account Settings → Integrations)
+	•	Build Supabase Edge Function: sitdeck-sync (inventory + readings)
+	•	Implement upsert to dc_rack_assets on sitdeck_rack_id
+	•	Implement insert to dc_sensor_readings
+	•	Implement rollup to data_library_records (hourly → daily aggregates)
+	•	Build dc_sync_log writes and status display
+	•	Wire live PUE tile on dashboard to dc_sensor_readings (most recent reading)
+	•	Confirm SitDeck API endpoints (validate against actual SitDeck API docs)
+8.4  Phase 4 — Agents (Week 5–6)
+	•	Extend Data Readiness agent context with dcMetadata and recentSensorReadings
+	•	Extend Boundary agent prompt with DC boundary rules
+	•	Build PUE & Efficiency Advisor agent (new endpoint in agent repo)
+	•	Wire PUE agent trigger from DC dashboard
+8.5  Acceptance Criteria
+
+Feature
+Acceptance Criteria
+Property creation
+Selecting data_centre asset type triggers DC Details form; dc_metadata row created
+Space template
+One-click DC template populates hall/plant room hierarchy; user can edit
+Portfolio dashboard
+Shows PUE, IT load, energy, renewable % for all DC properties
+PUE dashboard
+Time series of PUE with target overlay; component waterfall
+SitDeck connection
+API key + site ID saved; test connection validates; sync runs; dc_sensor_readings populated
+Data rollup
+SitDeck readings appear as data_library_records with source_type = connector and evidence linkage
+Audit trail
+Every SitDeck sync logged in dc_sync_log; data library records have created_at and traceability to sync
+PUE agent
+Agent returns structured output: summary, inefficiencies, recommendations, data gaps
+
+  9. Open Questions & Dependencies  
+9.1  SitDeck API
+Question
+Action
+What auth method does SitDeck use? (API key, OAuth, Basic?)
+Confirm by inspecting SitDeck docs or contacting SitDeck support
+What endpoints exist for power, PUE, environmental data?
+Confirm against SitDeck API documentation
+Does SitDeck provide a webhook or only polling?
+If webhooks available, prefer over polling for live data
+What rate limits apply?
+Confirm before setting sync frequency
+Is SitDeck data available at rack level or only site level?
+Determines granularity of dc_rack_assets and dc_sensor_readings
+9.2  Design Decisions
+Decision
+Recommended approach
+Should live PUE show on main property page?
+Yes — as a KPI tile conditional on asset_type = data_centre
+Should dc_sensor_readings be pruned after 90 days?
+Yes — via scheduled DB job; rolled-up data stays in data_library_records
+Should DC dashboards be a new top-level nav item or under existing Dashboards?
+Under existing Dashboards nav — new sub-section
+Should the PUE agent run automatically or on-demand only?
+On-demand for MVP; add auto-trigger when PUE > target + 0.1 in Phase 2
+
+
+
+  10. SitDeck Physical Risk & Location Intelligence  
+10.1  What This Is
+This section covers a second, distinct SitDeck product that is separate from the SitDeck DCIM platform described in Section 6. SitDeck (https://sitdeck.com) is a physical risk intelligence and situational awareness platform that provides CIA-level geospatial dashboards for monitoring real-world events and hazards around physical assets. It operates as a widget-based map intelligence layer.
+For Secure, this integration surfaces physical and climate risk directly on the data centre property view — showing the asset on a map alongside whichever risk overlay widgets the account holder has activated in their SitDeck account (flood zones, wildfire, extreme weather, geopolitical events, infrastructure outages, etc.). This data feeds directly into Secure’s existing Risk Diagnosis module as an external evidence source, with full provenance attribution.
+10.2  Integration Architecture
+Parameter
+Detail
+Integration type
+Embedded widget iframe (SitDeck account-linked) rendered inside Secure property view
+Auth model
+SitDeck account API key or embed token stored in Supabase secrets. Widget renders using the account’s own SitDeck session — risk layers shown are exactly those the user has activated in their SitDeck account
+Widget configuration
+Dynamic — risk layers displayed in Secure reflect whichever widgets the user has added to their SitDeck dashboard. No hardcoded risk types in Secure. If the user adds a flood widget in SitDeck, it appears in Secure automatically
+Location input
+Property lat/lng coordinates from the properties table. Passed to the SitDeck widget as the map centre point, so the data centre asset is automatically pinned on the map
+Risk Diagnosis feed
+Active risk widget types (flood, wildfire, etc.) are parsed from the SitDeck embed config and written to the property’s Risk Diagnosis record as physical_risk_flags with source = ‘sitdeck’ and evidence linkage to the widget snapshot
+10.3  Risk Widget Types
+The risk layers displayed on the Secure property map are determined entirely by which widgets the user has added in their SitDeck account. Secure does not maintain a fixed list — it renders whatever SitDeck provides. The following are representative widget types available in SitDeck that are directly relevant to data centre physical risk assessment:
+Risk Widget
+Risk Domain
+Relevance to Data Centre Assets
+Flood Risk
+Physical / Climate
+Critical for ground-floor critical plant (chillers, generators, UPS). Flood zone status affects insurance rating and lender due diligence
+Wildfire / Fire Risk
+Physical / Climate
+Relevant for edge and regional DCs in high-risk zones. Informs fire suppression system investment and disaster recovery planning
+Extreme Weather / Storms
+Physical / Climate
+Wind loading on cooling towers; storm surge risk for coastal facilities; feeds into TCFD acute physical risk disclosures
+Power Grid / Infrastructure Outage
+Operational
+Grid stability events near the facility. Validates need for N+1 or 2N UPS and generator sizing. Correlates with dc_metadata power_supply_redundancy
+Seismic / Earthquake
+Physical
+Structural risk for raised floor, cooling plant, and fuel storage. Affects Tier certification requirements in seismic zones
+Geopolitical / Civil Unrest
+Political / Security
+Cross-border data sovereignty risk and physical security posture for international portfolio assets. Relevant for SFDR regulatory risk disclosures
+10.4  Where This Appears in Secure
+The SitDeck physical risk map widget appears in two locations within Secure:
+	•	Property overview page (data_centre asset type only): A full-width map panel below the KPI tiles showing the property pin and all active risk overlay layers from the user’s SitDeck account. Visible to any user with read access to the property.
+	•	Risk Diagnosis dashboard (DC ESG tab, Section 5.7): A compact map widget alongside the physical risk flags panel. Active risk layer types are listed as structured risk_domain entries (e.g. flood: high, wildfire: medium) pulled from the SitDeck widget metadata and written to the property risk record.
+10.5  Schema: sitdeck_risk_config
+A new table stores the SitDeck physical risk account connection and the last-known active widget configuration per property. Migration file: add-sitdeck-risk-config.sql.
+Column
+Type
+Description
+id
+uuid PK
+Auto-generated
+account_id
+uuid FK
+RLS scope — account-level connection
+property_id
+uuid FK UNIQUE
+One configuration row per property
+sitdeck_embed_token
+text (secret)
+Stored in Supabase secrets, not in this table directly. Referenced by secret name
+active_widget_types
+text[]
+Last-known list of risk widget types active in the user’s SitDeck account for this property (e.g. [‘flood’, ‘wildfire’, ‘grid_outage’]). Used to populate Risk Diagnosis flags
+last_synced_at
+timestamptz
+When active_widget_types was last refreshed from SitDeck
+10.6  Connection UI
+In Account Settings → Integrations, add a SitDeck Physical Risk card (separate from the SitDeck DCIM card in Section 6.6):
+	•	Input: SitDeck embed token or API key (stored in Supabase secrets, never in the DB row)
+	•	Assign connection to property: dropdown of data_centre properties where no sitdeck_risk_config row yet exists
+	•	Status indicator: Connected (shows active widget types and last sync time) | Not connected | Auth error
+	•	Manual refresh: ‘Refresh widget config’ button updates active_widget_types from the SitDeck account and writes to sitdeck_risk_config
+10.7  How Risk Flows into Risk Diagnosis
+The SitDeck physical risk map is not a decorative layer — the widget data feeds Secure’s audit-ready Risk Diagnosis module. The flow is as follows:
+	•	Widget refresh: When the Secure backend refreshes sitdeck_risk_config.active_widget_types, it reads the list of active risk layer types from the SitDeck account.
+	•	Risk flag write: Each active widget type is written to the property’s risk record as a physical_risk_flag entry with: risk_domain (flood | wildfire | extreme_weather | grid_outage | seismic | geopolitical), source = ‘sitdeck’, evidence_ref pointing to the sitdeck_risk_config row, and recorded_at timestamp.
+	•	Audit trail: Every write to physical_risk_flags from SitDeck produces an audit_event entry (action: risk_flag_updated, source: sitdeck, property_id). This ensures the risk profile is traceable and defensible for TCFD, SFDR, and lender due diligence.
+	•	No hardcoding: Secure never assumes which risk types are active. The risk profile of a property is always derived from what the user has actually configured in their SitDeck account — not from a fixed risk taxonomy. Adding a new widget in SitDeck automatically propagates to the property’s risk record in Secure on the next refresh.
+10.8  Implementation Notes for Cursor
+	•	Confirm with SitDeck whether they provide an embed URL, an iframe token, or a JavaScript widget SDK. The integration approach (iframe vs JS SDK) determines implementation method.
+	•	Property lat/lng must be present in the properties table before the map widget can render. Add a lat/lng field to property creation if not already present.
+	•	The two SitDeck integrations (DCIM in Section 6, Physical Risk in Section 10) must be presented as separate connection cards in Account Settings. They use different credentials and serve different purposes.
+	•	Migration file: add-sitdeck-risk-config.sql (sitdeck_risk_config table + RLS). Add to Phase 3 implementation plan alongside the DCIM sync migrations.
+
+End of Specification
+Secure SoR — Data Centre Asset Type — v1.0 — March 2026
