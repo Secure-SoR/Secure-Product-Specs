@@ -57,10 +57,34 @@ CREATE TABLE IF NOT EXISTS public.properties (
   floors jsonb,
   floors_in_scope jsonb,
   total_area numeric,
+  latitude numeric,
+  longitude numeric,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_properties_account_id ON public.properties(account_id);
+
+CREATE TABLE IF NOT EXISTS public.dc_metadata (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  tier_level text,
+  design_capacity_mw numeric,
+  current_it_load_mw numeric,
+  total_white_floor_sqm numeric,
+  cooling_type text[],
+  power_supply_redundancy text,
+  target_pue numeric,
+  renewable_energy_pct numeric,
+  water_usage_effectiveness_target numeric,
+  certifications text[],
+  sitdeck_site_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(property_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dc_metadata_account_id ON public.dc_metadata(account_id);
+CREATE INDEX IF NOT EXISTS idx_dc_metadata_property_id ON public.dc_metadata(property_id);
 
 CREATE TABLE IF NOT EXISTS public.spaces (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -229,6 +253,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.account_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dc_metadata ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.systems ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meters ENABLE ROW LEVEL SECURITY;
@@ -255,6 +280,10 @@ DROP POLICY IF EXISTS "Members can read properties in their accounts" ON public.
 DROP POLICY IF EXISTS "Members can insert properties in their accounts" ON public.properties;
 DROP POLICY IF EXISTS "Members can update properties in their accounts" ON public.properties;
 DROP POLICY IF EXISTS "Members can delete properties in their accounts" ON public.properties;
+DROP POLICY IF EXISTS "Members can read dc_metadata in their accounts" ON public.dc_metadata;
+DROP POLICY IF EXISTS "Members can insert dc_metadata in their accounts" ON public.dc_metadata;
+DROP POLICY IF EXISTS "Members can update dc_metadata in their accounts" ON public.dc_metadata;
+DROP POLICY IF EXISTS "Members can delete dc_metadata in their accounts" ON public.dc_metadata;
 DROP POLICY IF EXISTS "Members can manage spaces in their account properties" ON public.spaces;
 DROP POLICY IF EXISTS "Members can read systems in their accounts" ON public.systems;
 DROP POLICY IF EXISTS "Members can insert systems in their accounts" ON public.systems;
@@ -309,6 +338,20 @@ CREATE POLICY "Members can update properties in their accounts"
   USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
 CREATE POLICY "Members can delete properties in their accounts"
   ON public.properties FOR DELETE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- dc_metadata
+CREATE POLICY "Members can read dc_metadata in their accounts"
+  ON public.dc_metadata FOR SELECT
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can insert dc_metadata in their accounts"
+  ON public.dc_metadata FOR INSERT
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can update dc_metadata in their accounts"
+  ON public.dc_metadata FOR UPDATE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can delete dc_metadata in their accounts"
+  ON public.dc_metadata FOR DELETE
   USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
 
 -- spaces

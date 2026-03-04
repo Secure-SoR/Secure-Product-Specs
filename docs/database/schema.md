@@ -39,6 +39,7 @@ Supabase Auth creates the user; the `handle_new_user` trigger creates a row in `
 | accounts               | Tenant/organisation                          | —              |
 | account_memberships    | User ↔ Account, role                         | Yes (via account_id) |
 | properties             | Property (building)                          | Yes            |
+| dc_metadata            | Data centre metadata (one row per DC property) | Yes          |
 | spaces                 | Space within a property                      | Via property   |
 | systems                | Building system (HVAC, Power, etc.)          | Yes            |
 | meters                 | Meter (first-class)                          | Yes            |
@@ -131,10 +132,39 @@ Property (building/site). Account-scoped.
 | floors_in_scope   | jsonb     | YES      | Subset of floors the tenant occupies; saved from "Floors in Scope" tile (spaces subpage) |
 | in_scope_area    | numeric   | YES      | Tenant footprint area (e.g. m²); editable in Floors in Scope tile (migration: add-property-in-scope-area.sql) |
 | total_area | numeric   | YES      | |
+| latitude  | numeric   | YES      | Property latitude for maps and SitDeck widgets (migration: add-properties-lat-lng.sql) |
+| longitude | numeric   | YES      | Property longitude for maps and SitDeck widgets (migration: add-properties-lat-lng.sql) |
 | created_at | timestamptz | NO    | |
 | updated_at | timestamptz | NO    | |
 
-**Migration (existing DBs):** If `properties` was created before these updates, add columns in SQL Editor: `ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS city text, ADD COLUMN IF NOT EXISTS region text, ADD COLUMN IF NOT EXISTS postcode text, ADD COLUMN IF NOT EXISTS nla text, ADD COLUMN IF NOT EXISTS asset_type text DEFAULT 'Office', ADD COLUMN IF NOT EXISTS year_built integer, ADD COLUMN IF NOT EXISTS last_renovation integer, ADD COLUMN IF NOT EXISTS operational_status text, ADD COLUMN IF NOT EXISTS occupancy_scope text, ADD COLUMN IF NOT EXISTS floors_in_scope jsonb;`
+**Migration (existing DBs):** If `properties` was created before these updates, add columns in SQL Editor: `ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS city text, ADD COLUMN IF NOT EXISTS region text, ADD COLUMN IF NOT EXISTS postcode text, ADD COLUMN IF NOT EXISTS nla text, ADD COLUMN IF NOT EXISTS asset_type text DEFAULT 'Office', ADD COLUMN IF NOT EXISTS year_built integer, ADD COLUMN IF NOT EXISTS last_renovation integer, ADD COLUMN IF NOT EXISTS operational_status text, ADD COLUMN IF NOT EXISTS occupancy_scope text, ADD COLUMN IF NOT EXISTS floors_in_scope jsonb;` For latitude/longitude: see [add-properties-lat-lng.sql](./migrations/add-properties-lat-lng.sql).
+
+---
+
+### 3.4a dc_metadata
+
+Data centre–specific metadata. One row per property with `asset_type = 'data_centre'`. Spec: [docs/specs/secure-dc-spec-v2.md](../specs/secure-dc-spec-v2.md) §2.2.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | uuid | NO | PK |
+| account_id | uuid | NO | FK → accounts.id |
+| property_id | uuid | NO | FK → properties.id (UNIQUE) |
+| tier_level | text | YES | Uptime Institute Tier (I \| II \| III \| IV) |
+| design_capacity_mw | numeric | YES | Total IT load capacity (MW) |
+| current_it_load_mw | numeric | YES | Live or last-known IT load (MW) |
+| total_white_floor_sqm | numeric | YES | Total raised floor / white floor area |
+| cooling_type | text[] | YES | air_cooled \| liquid_cooled \| hybrid \| free_cooling |
+| power_supply_redundancy | text | YES | N \| N+1 \| 2N \| 2N+1 |
+| target_pue | numeric | YES | Design or target PUE (e.g. 1.3) |
+| renewable_energy_pct | numeric | YES | % of power from renewables (0–100) |
+| water_usage_effectiveness_target | numeric | YES | Target WUE (L/kWh) |
+| certifications | text[] | YES | ISO 50001 \| ISO 14001 \| LEED \| BREEAM \| EU CoC |
+| sitdeck_site_id | text | YES | SitDeck site identifier |
+| created_at | timestamptz | NO | |
+| updated_at | timestamptz | NO | |
+
+**RLS:** account-scoped (SELECT, INSERT, UPDATE, DELETE for members). **Migration:** [add-dc-metadata.sql](./migrations/add-dc-metadata.sql).
 
 ---
 
@@ -350,6 +380,7 @@ Append-only audit log. Before/after state for traceability.
 
 - **accounts** ← account_memberships (user_id → auth.users)
 - **accounts** ← properties ← spaces
+- **accounts** ← properties ← dc_metadata (one row per data_centre property)
 - **accounts** ← properties ← systems ← end_use_nodes
 - **accounts** ← properties ← meters (optional system_id → systems)
 - **accounts** ← data_library_records (optional property_id)
