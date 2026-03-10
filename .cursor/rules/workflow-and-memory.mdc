@@ -1,0 +1,62 @@
+---
+description: Workspace layout, backend vs AI agents mode, folder scope, and implementation workflow
+alwaysApply: true
+---
+
+# Cursor memory & workflow (this workspace)
+
+This workspace contains **three roots/folders**: **Secure-SoR-backend**, **Newsletter**, and **AI Agents**. There are **2 modes** when working here: **backend mode** and **AI agents mode**. Which mode we're in determines which folder to use and what to create or edit. Apply these rules in this workspace for both modes (and any agents working in it).
+
+---
+
+## Backend mode vs AI agents mode — which folder to use
+
+- **Backend mode (Secure-SoR-backend folder):**
+  - **Use / keep up to date:** Everything in the backend root. Specs go in `docs/specs/`. Implementation guides in `docs/specs/` (e.g. `implementation-guide-phase-*.md`). Lovable prompts in `docs/` (e.g. `LOVABLE-PROMPT-*.md`). Migrations in `docs/database/migrations/`. Schema docs: `docs/database/schema.md`, `docs/database/supabase-schema.sql`. Data model / taxonomy: `docs/data-model/`.
+  - **Do not create or edit:** Agent application code (that lives in the AI Agents folder). In backend mode we only produce specs, guides, migrations, and Lovable prompts; we do not write agent application code here.
+
+- **AI agents mode (AI Agents folder):**
+  - **Use / keep up to date:** The AI Agents root (agent code, agent docs). Schema and API contracts stay defined in the **Secure-SoR-backend** folder; the agent implements the API and reads context from the backend docs.
+  - **Do not create or edit:** Backend migrations, Supabase schema, or Lovable prompts in the AI Agents folder. Those live in Secure-SoR-backend only.
+
+**Summary:** Backend folder = specs, guides, migrations, schema docs, Lovable prompts. AI Agents folder = agent app code and agent-specific docs. Newsletter folder is part of this workspace; treat it according to the current mode or product intent. After each implementation step, keep all files in the **relevant folder** up to date (e.g. if we add a table in backend mode, update schema.md and any guide that references it in the backend folder).
+
+---
+
+## How every implementation is done (product-led, via Cursor) — backend mode
+
+When working in **backend mode** (Secure-SoR-backend folder):
+
+1. **Product pastes the specification** into Cursor (backend folder).
+2. **Cursor produces:**
+   - An **md file** that captures the spec (e.g. in `docs/specs/`).
+   - A **guide** (e.g. implementation guide with "what it means" and "how to do it").
+   - **Concrete implementation steps** derived from the guide:
+     - **Lovable prompts** — ready-to-paste instructions for the UI (save as `docs/LOVABLE-PROMPT-*.md`).
+     - **Migrations** — SQL files (e.g. `docs/database/migrations/add-*.sql`) with exact tables/columns and how to run them (e.g. Supabase SQL Editor).
+     - **Schema docs** — updates to `docs/database/schema.md` and `docs/database/supabase-schema.sql` so the backend docs match the real database.
+3. **Product does everything:** Run migrations in Supabase, paste Lovable prompts into Lovable, and follow the guide. Provide **clear, step-by-step instructions** (which SQL to run and how, which prompt to paste where, what to check after).
+
+**Rule:** Every new functionality goes through Cursor in this way. No implementation is done without a spec → md file → guide → steps (Lovable prompts, migrations, schema updates). Keep all of these in sync after each implementation.
+
+---
+
+## What every implementation needs
+
+- **Migrations:** Which SQL file(s) to run, in which order. Exact table and column names. How to run them (e.g. "Supabase Dashboard → SQL Editor → paste and Run"). Idempotent where possible (e.g. DROP POLICY IF EXISTS before CREATE POLICY) so re-running doesn't fail.
+- **Lovable prompts:** One prompt per UI change (or one doc with several prompts). Paste-ready text that tells Lovable exactly what to build (fields, validation, save behaviour, mapping to Supabase columns). If there's a mapping (e.g. form field → DB column), include it in the prompt.
+- **Schema docs:** After any migration, update `schema.md` and, if applicable, `supabase-schema.sql` so the docs match the database. List new tables/columns and point to the migration file.
+- **Guides:** Plain-language explanation of each step ("what it means", "how to do it") so product can follow or hand off without guessing.
+
+---
+
+## Folder checklist (keep up to date after each implementation)
+
+| What changed        | Files/folders to update |
+|---------------------|-------------------------|
+| New table / columns | `docs/database/migrations/` (new .sql), `docs/database/schema.md`, `docs/database/supabase-schema.sql` |
+| New UI flow         | `docs/LOVABLE-PROMPT-*.md` (new or updated), implementation guide in `docs/specs/` |
+| New spec / feature  | `docs/specs/*.md` (spec + implementation guide), step-by-step in guide, then prompts + migrations from it |
+| Taxonomy / enums    | `docs/data-model/*.md` (e.g. space-types-taxonomy, building-systems-taxonomy), schema.md if needed |
+
+All of the above live in the **Secure-SoR-backend** folder. When in **AI agents mode**, work only in the AI Agents folder; stay in sync by reading backend docs (context shape, API contract). Backend folder is the source of truth for schema and product behaviour.
