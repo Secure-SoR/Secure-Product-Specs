@@ -2,6 +2,10 @@
 
 Use this before implementing the backend/upload for the Data Library: it summarises what exists in the repo, the **Lovable Data Library structure** (tiles, routes, record model), and the mapping to backend schema and upload flow.
 
+**Records vs proofs, shared upload, and DC dashboards:** See [DATA-LIBRARY-RECORDS-VS-PROOFS-AND-DC-DASHBOARDS.md](DATA-LIBRARY-RECORDS-VS-PROOFS-AND-DC-DASHBOARDS.md) for the distinction between records (data_library_records) and proofs (documents + evidence_attachments), the requirement for one shared upload component across the data library, and how data library data populates Data Centre dashboards.
+
+**ESG Report / Sustainability Reporting:** See [specs/esg-report-specifications.md](specs/esg-report-specifications.md) for the ESG Report module. Routes confirmed: `/esg` (hub), `/esg/corporate` (Sustainability & Energy Report), `/esg/secr` (UK SECR preview), `/esg/advisor` (Reporting Advisor). Governance and Targets tabs pull live data from Data Library; Energy & Carbon and Waste & Water to be wired to real data.
+
 ---
 
 ## Lovable Data Library structure (reference)

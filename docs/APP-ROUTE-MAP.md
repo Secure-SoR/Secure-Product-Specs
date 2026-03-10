@@ -28,7 +28,8 @@ All of the following require authentication. If the user is not logged in, redir
 
 - Account Settings, Property & Onboarding, Spaces & Systems  
 - **Data Library** (see [sources/lovable-data-library-spec.md](sources/lovable-data-library-spec.md) §2.3 for full map): `/data-library`, `/data-library/energy`, `/data-library/water`, `/data-library/waste`, etc.  
-- Reports, Dashboards (Energy, Carbon, Risk, etc.), Landlord Portal  
+- **Reports** — ESG Report / Sustainability Reporting (see [specs/esg-report-specifications.md](specs/esg-report-specifications.md)): `/esg` (hub), `/esg/corporate` (Sustainability & Energy Report), `/esg/secr` (UK SECR preview), `/esg/advisor` (Reporting Advisor).  
+- Dashboards (Energy, Carbon, Risk, etc.), Landlord Portal  
 - IoT / Device pages, Governance & Targets, Surveys & Feedback  
 
 ~67 routes total (62 pages + 5 redirects); structure in [architecture/architecture.md](architecture/architecture.md) §1.2.
@@ -37,6 +38,7 @@ All of the following require authentication. If the user is not logged in, redir
 
 ## Where this is referenced
 
+- **Backend:** [specs/esg-report-specifications.md](specs/esg-report-specifications.md) — ESG Report routes confirmed: `/esg`, `/esg/corporate`, `/esg/secr`, `/esg/advisor`.
 - **Backend:** [architecture/architecture.md](architecture/architecture.md) §1.2 Routes — entry/auth flow and link here.  
 - **Backend:** [LOVABLE-PROMPT-FIX-PUBLIC-PAGE-ROUTING.md](LOVABLE-PROMPT-FIX-PUBLIC-PAGE-ROUTING.md) — prompt to fix routing; after Lovable applies it, update this file with confirmed paths.  
 - **Backend:** [LOVABLE-PUBLIC-PAGE-COPY-SECURETIGRE.md](LOVABLE-PUBLIC-PAGE-COPY-SECURETIGRE.md) — public page lives at `/` when not logged in.  
@@ -50,3 +52,4 @@ All of the following require authentication. If the user is not logged in, redir
 |------|--------|
 | (Initial) | Canonical entry/auth flow added: Landing at `/`, Sign in → Login/Signup → Dashboard; auth redirects. |
 | (When Lovable confirms) | Update with actual paths (e.g. `/dashboard` vs `/app`) and any path renames. |
+| Feb 2026 | ESG Report routes confirmed from Lovable: `/esg`, `/esg/corporate`, `/esg/secr`, `/esg/advisor`. |
