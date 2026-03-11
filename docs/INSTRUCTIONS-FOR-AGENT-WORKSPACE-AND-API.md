@@ -4,13 +4,27 @@ Use this when (1) you need to **pass instructions to the other workspace** (the 
 
 ---
 
+## Workspace roots (multi-root Cursor setup)
+
+This backend repo is often used in a Cursor workspace with two other roots:
+
+| Root | Path | Role |
+|------|------|------|
+| **Secure-SoR-backend** | `.../Documents/Secure-SoR-backend` | Docs, schema, migrations, handover for agent + Lovable |
+| **AI Agents** | `/Users/anamariaspulber/Documents/AI Agents` | Data Readiness / Boundary agent |
+| **Lovable** | `/Users/anamariaspulber/Documents/[Apex TIGRE]/1_Secure/Repositories/Lovable` | Frontend app (Supabase + agent UI) |
+
+When pointing the agent at this repo, use the path to **Secure-SoR-backend**; agent folder: `Secure-SoR-backend/docs/for-agent/`.
+
+---
+
 ## Part 1: What to give to the AI agent workspace
 
 The AI agent (Data Readiness / Boundary) lives in a **separate project** (e.g. `Documents/AI Agents/agent`). The backend repo (Secure-SoR-backend) is the **source of truth** for context shape, DB columns, and how Lovable builds context from Supabase.
 
 ### Option A — Copy the handover folder into the agent repo
 
-1. Copy the entire folder **`docs/handover-files-for-agent/`** from this repo into the agent project (e.g. `agent/backend-instructions/` or `docs/backend-instructions/`).
+1. Copy the entire folder **`docs/for-agent/`** from this repo into the agent project (e.g. `agent/backend-instructions/` or `docs/backend-instructions/`).
 2. In the agent project, tell your AI or team: **"Use the files in `backend-instructions/` (or the path you chose). Read in this order: README.md → INSTRUCTIONS.md → CONTEXT-SOURCE.md → AGENT-TASKS.md → BACKEND-SYNC-NOTES.md → COVERAGE-AND-APPLICABILITY-FOR-AGENT.md."**
 
 ### Option B — Point the agent at this repo (no copy)
@@ -18,7 +32,7 @@ The AI agent (Data Readiness / Boundary) lives in a **separate project** (e.g. `
 In the agent project, add a short README or `CONTEXT-SOURCE.md` that says:
 
 - **Context shape and API contract:** Read from the **backend repo** at  
-  `[path]/Secure-SoR-backend/docs/handover-files-for-agent/`  
+  `[path]/Secure-SoR-backend/docs/for-agent/`  
   Start with **README.md** and **INSTRUCTIONS.md**; then **CONTEXT-SOURCE.md**, **AGENT-TASKS.md**, **BACKEND-SYNC-NOTES.md**, **COVERAGE-AND-APPLICABILITY-FOR-AGENT.md**.
 
 Replace `[path]` with the actual path (e.g. `../Secure-SoR-backend` if the agent repo is next to it).
@@ -30,12 +44,12 @@ When you open the **agent workspace**, give it this instruction (adjust the path
 ```
 Use the backend repo for context shape and API contract. Read these files in order:
 
-1. [backend-path]/docs/handover-files-for-agent/README.md
-2. [backend-path]/docs/handover-files-for-agent/INSTRUCTIONS.md
-3. [backend-path]/docs/handover-files-for-agent/CONTEXT-SOURCE.md
-4. [backend-path]/docs/handover-files-for-agent/AGENT-TASKS.md
-5. [backend-path]/docs/handover-files-for-agent/BACKEND-SYNC-NOTES.md
-6. [backend-path]/docs/handover-files-for-agent/COVERAGE-AND-APPLICABILITY-FOR-AGENT.md
+1. [backend-path]/docs/for-agent/README.md
+2. [backend-path]/docs/for-agent/INSTRUCTIONS.md
+3. [backend-path]/docs/for-agent/CONTEXT-SOURCE.md
+4. [backend-path]/docs/for-agent/AGENT-TASKS.md
+5. [backend-path]/docs/for-agent/BACKEND-SYNC-NOTES.md
+6. [backend-path]/docs/for-agent/COVERAGE-AND-APPLICABILITY-FOR-AGENT.md
 
 Apply the agent to whatever property context is sent; context is built by Lovable from Supabase (properties, spaces, systems, data_library_records, evidence). Input schema must match Phase 5 "Agent context shape" (propertyId, propertyName, spaces, systems, nodes, dataLibraryRecords, evidence; optional floorsInScope, reportingBoundary, propertyUtilityApplicability, propertyServiceChargeIncludes). Document the API endpoint and request/response so Lovable can call the agent. When reasoning about water/heating completeness, use property_utility_applicability and property_service_charge_includes per COVERAGE-AND-APPLICABILITY-FOR-AGENT.md.
 ```
@@ -110,7 +124,6 @@ The **“Run agent”** flow in Lovable **POSTs** the context JSON to the agent�
 
 | What | Where |
 |------|--------|
-| Handover folder (copy to agent) | `docs/handover-files-for-agent/` |
+| Agent folder (copy to agent project) | `docs/for-agent/` |
 | Agent context shape (Phase 5) | `docs/implementation-plan-lovable-supabase-agent.md` (§ Phase 5) |
-| For-agent sync notes | `docs/for-agent/README.md`, `docs/for-agent/AGENT-TASKS.md` |
 | DB schema and migrations | `docs/database/schema.md`, `docs/database/migrations/` |

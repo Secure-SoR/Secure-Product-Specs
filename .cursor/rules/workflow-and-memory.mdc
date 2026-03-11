@@ -1,18 +1,27 @@
 ---
-description: Workspace layout, backend vs AI agents mode, folder scope, and implementation workflow
+description: Workspace layout, four roots, declare mode, and implementation workflow
 alwaysApply: true
 ---
 
 # Cursor memory & workflow (this workspace)
 
-This workspace contains **three roots/folders**: **Secure-SoR-backend**, **Newsletter**, and **AI Agents**. There are **2 modes** when working here: **backend mode** and **AI agents mode**. Which mode we're in determines which folder to use and what to create or edit. Apply these rules in this workspace for both modes (and any agents working in it).
+This workspace has **four roots**: **Secure-SoR-backend**, **Lovable**, **Newsletter**, **AI Agents**. The user gives all instructions from here (including Lovable prompts for the Secure app). **Declare which mode you're in** so only the right folder(s) are edited and files stay aligned.
+
+| Root | Purpose |
+|------|--------|
+| **Secure-SoR-backend** | Backend logic, schema, migrations, specs, **Lovable prompts** (source of truth). |
+| **Lovable** | Lovable (frontend) repo for Secure; updated by applying prompts created in the backend. |
+| **AI Agents** | AI agents on the platform; use platform DB data; align with backend schema/docs. |
+| **Newsletter** | Newsletter project; use only when explicitly asked. |
+
+**Modes:** Backend mode (default) = work only in Secure-SoR-backend. Lovable mode = work in Lovable root (e.g. align with specs). AI Agents mode = work in AI Agents root. Do not work in all four at once; work in the root(s) that match the user's instruction and declared mode. If the user says "We're on backend", create/edit only in Secure-SoR-backend. Full table and flow: see [docs/CURSOR-MEMORY-AND-WORKFLOW.md](docs/CURSOR-MEMORY-AND-WORKFLOW.md) § Four workspace roots.
 
 ---
 
 ## Backend mode vs AI agents mode — which folder to use
 
 - **Backend mode (Secure-SoR-backend folder):**
-  - **Use / keep up to date:** Everything in the backend root. Specs go in `docs/specs/`. Implementation guides in `docs/specs/` (e.g. `implementation-guide-phase-*.md`). Lovable prompts in `docs/` (e.g. `LOVABLE-PROMPT-*.md`). Migrations in `docs/database/migrations/`. Schema docs: `docs/database/schema.md`, `docs/database/supabase-schema.sql`. Data model / taxonomy: `docs/data-model/`.
+  - **Use / keep up to date:** Everything in the backend root. Specs go in `docs/specs/`. Implementation guides in `docs/specs/` (e.g. `implementation-guide-phase-*.md`). Lovable prompts in `docs/lovable-prompts/` (see docs/lovable-prompts/README.md). Migrations in `docs/database/migrations/`. Schema docs: `docs/database/schema.md`, `docs/database/supabase-schema.sql`. Data model / taxonomy: `docs/data-model/`.
   - **Do not create or edit:** Agent application code (that lives in the AI Agents folder). In backend mode we only produce specs, guides, migrations, and Lovable prompts; we do not write agent application code here.
 
 - **AI agents mode (AI Agents folder):**
@@ -32,7 +41,7 @@ When working in **backend mode** (Secure-SoR-backend folder):
    - An **md file** that captures the spec (e.g. in `docs/specs/`).
    - A **guide** (e.g. implementation guide with "what it means" and "how to do it").
    - **Concrete implementation steps** derived from the guide:
-     - **Lovable prompts** — ready-to-paste instructions for the UI (save as `docs/LOVABLE-PROMPT-*.md`).
+     - **Lovable prompts** — ready-to-paste instructions for the UI (save as `docs/lovable-prompts/LOVABLE-PROMPT-<name>.md`).
      - **Migrations** — SQL files (e.g. `docs/database/migrations/add-*.sql`) with exact tables/columns and how to run them (e.g. Supabase SQL Editor).
      - **Schema docs** — updates to `docs/database/schema.md` and `docs/database/supabase-schema.sql` so the backend docs match the real database.
 3. **Product does everything:** Run migrations in Supabase, paste Lovable prompts into Lovable, and follow the guide. Provide **clear, step-by-step instructions** (which SQL to run and how, which prompt to paste where, what to check after).
@@ -55,7 +64,7 @@ When working in **backend mode** (Secure-SoR-backend folder):
 | What changed        | Files/folders to update |
 |---------------------|-------------------------|
 | New table / columns | `docs/database/migrations/` (new .sql), `docs/database/schema.md`, `docs/database/supabase-schema.sql` |
-| New UI flow         | `docs/LOVABLE-PROMPT-*.md` (new or updated), implementation guide in `docs/specs/` |
+| New UI flow         | `docs/lovable-prompts/*.md` (new or updated), implementation guide in `docs/specs/` |
 | New spec / feature  | `docs/specs/*.md` (spec + implementation guide), step-by-step in guide, then prompts + migrations from it |
 | Taxonomy / enums    | `docs/data-model/*.md` (e.g. space-types-taxonomy, building-systems-taxonomy), schema.md if needed |
 

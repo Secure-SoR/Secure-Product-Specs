@@ -2,6 +2,8 @@
 **Secure SoR — Sustainability Reporting / ESG Report Module**
 *Version 1.0 | February 2026 | Owner: Anne*
 
+This spec follows [SPEC-TEMPLATE.md](SPEC-TEMPLATE.md) (10 required sections).
+
 ---
 
 ## Note for the engineering team (production build)
@@ -10,7 +12,7 @@ This spec integrates the **Lovable UI description** of the ESG Report feature (r
 
 ---
 
-## Overview
+## 1. Feature Overview
 
 The **ESG Report** (Sustainability Reporting) is a platform module that produces and presents ESG-related outputs for disclosure and export. It consumes data from the Data Library, Emissions Engine, and AI agents (Data Readiness, Boundary, Reporting Copilot). It supports frameworks such as SECR, GRESB, TCFD, CDP, and SFDR.
 
@@ -23,15 +25,90 @@ The **ESG Report** (Sustainability Reporting) is a platform module that produces
 - **Reporting Copilot** — AI agent (POST `/api/reporting-copilot`) invoked from **AI Agents** dashboard (`/ai-agents`), not from the report page. App should pass `dataReadinessOutput` and `boundaryOutput` when available. Generated report is displayed in the AI Agents dashboard.
 - **DC dashboards** — The Data Centre **ESG & Reporting Readiness** dashboard (`/dashboards/data-centre/:propertyId/esg`) is separate; this spec is for the **ESG Report** module under `/esg`.
 
+**Who uses it:** Sustainability / ESG teams, asset managers, and report preparers. Access behind auth; report scope is account-level (reporting boundary). **Business problem:** Single place to view, generate, and export sustainability/ESG content for regulatory (SECR), voluntary (GRESB, CDP, TCFD), and investor (SFDR) use without duplicating data entry.
+
+---
+
+## 2. Functional Requirements
+
+- User opens Reports from sidebar → hub at `/esg` (or `/reports`) with report cards (Sustainability & Energy Report, UK SECR, Reporting Advisor, optional Landlord Pack).
+- User clicks "Open Report" on Sustainability & Energy Report → `/esg/corporate` with 7 tabs (Executive Summary, Organisational Boundary, Energy & Carbon, Scope 3, Waste & Water, Governance & Data Quality, Targets). User can edit narratives, request review, print, export PDF. System shows live data from Data Library (Governance, Targets) and Emissions Engine where wired; mock data for Energy & Carbon, Scope 3, Waste & Water until wired.
+- User opens UK SECR → `/esg/secr` (preview mode); sample data only; Print/Export disabled. User opens Reporting Advisor → `/esg/advisor` for AI-powered recommendations (hardcoded list for now).
+- Report instance status (Draft → Requested → In Review → Approved) stored in localStorage; data change detection shows "Re-open as Draft" when source data changes after approval. Expected system response: tabs load correct data; export produces PDF; back button returns to hub.
+
+---
+
+## 3. API Endpoints / Data Surface
+
+- **Supabase tables:** `data_library_records` (governance, targets), `documents`, `evidence_attachments`, `accounts` (reporting boundary). Queries scoped by `account_id`. No report-specific tables yet; report instance in localStorage.
+- **External:** POST `/api/reporting-copilot` — AI agent; invoked from AI Agents dashboard (`/ai-agents`). Request: property context, reporting year, optionally `dataReadinessOutput`, `boundaryOutput`. Response: generated report payload (structure TBD). Status codes: 200 OK, 4xx/5xx on failure.
+- **Export:** Client-side PDF generation (`useExport` / `pdfGenerator`); no dedicated export endpoint.
+
+---
+
+## 4. Database Schema
+
+- **Read from:** `data_library_records` (subject_category IN ('governance', 'targets')), `evidence_attachments`, `documents`, `accounts`. See [docs/database/schema.md](../database/schema.md).
+- **Report instance (future):** Consider `report_versions` or `report_instances` table (id, account_id, report_type, reporting_year, status, narrative_snapshot, created_at, updated_at) for persistence and audit. Not in current schema; currently localStorage.
+
+---
+
+## 5. Business Logic & Validation Rules
+
+- Report scope = account-level; no property selector on report pages. Reporting year and boundary approach from `accounts.reportingBoundary`.
+- Governance and Targets tabs: only display records where subject_category = 'governance' | 'targets'. Energy & Carbon / Waste & Water: when wired, use data_library_records + Emissions Engine output; no manual override of calculated emissions in report.
+- Export PDF: only for Sustainability & Energy Report and (from hub) Landlord Pack. SECR export disabled. Report instance status transitions: Draft ↔ Requested ↔ In Review ↔ Approved; data fingerprint change after approval → show "Re-open as Draft".
+
+---
+
+## 6. Authentication & Authorization
+
+- All report routes behind **ProtectedRoute**. RLS on underlying tables (data_library_records, accounts) enforces account scope. No role-based restriction on viewing reports; any account member can open report. Export and "Request Review" follow same auth. Reporting Copilot invoked from AI Agents dashboard; agent API may require API key or session (implementation-specific).
+
+---
+
+## 7. State & Workflow
+
+- **Report instance status:** Draft → Requested → In Review → Approved. Stored in localStorage (`useReportInstance`). Trigger: user clicks "Request Review" or admin updates status. Data change detection: when governance/targets record set or timestamps change after approval, show "Re-open as Draft" and allow user to reset to Draft.
+- **Sequence:** User opens report → loads data from Supabase (governance, targets) and optionally Emissions Engine; mock for unwired tabs. User edits narratives → save to localStorage. User exports PDF → client-side generation. Reporting Copilot run is separate flow from AI Agents dashboard.
+
+---
+
+## 8. Error Handling
+
+- **Data load failure:** If Supabase query for governance/targets fails, show inline error in tab ("Unable to load data. Try refreshing."); do not surface raw error. Fallback: empty table or placeholder.
+- **Export failure:** If PDF generation fails, show toast or inline message ("Export failed. Try again.").
+- **Reporting Copilot:** On 4xx/5xx, show error in AI Agents dashboard; do not update report page. No retry logic specified.
+- **No specific error codes** in spec; use generic user-facing messages.
+
+---
+
+## 9. External Integrations & Events
+
+- **Reporting Copilot:** POST `/api/reporting-copilot` (AI agent). Invoked from `/ai-agents`; not from report page. Consumes Data Readiness and Boundary outputs when passed. No webhooks or events from report module to agent.
+- **Data Library:** Report reads governance and targets from Data Library; "Manage in Data Library" links. No push from Data Library to report.
+- **Emissions Engine:** Report consumes Scope 1/2/3 output when wired; read-only. No events.
+- **Account Settings:** Report reads reporting boundary from account; "Edit in Account Settings" link.
+
+---
+
+## 10. Non-Functional Requirements
+
+- **Performance:** Report page should load governance and targets in a single or few queries; avoid N+1. PDF export may take several seconds for large reports; show progress or spinner.
+- **Data retention:** Report instance in localStorage is per-browser; no retention policy. If report_versions table is added, define retention (e.g. keep last 5 versions per report type per year).
+- **Logging:** Consider logging report export and status changes in `audit_events` (entity_type e.g. `esg_report`, `report_export`) when moving to server-side persistence.
+- **Security:** No report-specific rate limits in spec. Export and view subject to same RLS as underlying data.
+
 ---
 
 ## Routes (Lovable UI — confirmed)
 
-**Sidebar label:** "Reports" (icon: Leaf), under `moduleId: "esg_reports"`. All routes are protected (auth required). There is no `/reporting` or `/sustainability-reporting` path.
+**Sidebar label:** "Reports" (icon: Leaf), under `moduleId: "esg_reports"`. All routes are protected (auth required). ESG and SECR are part of the **Reports** section, so the hub should be at **`/reports`**; Back from report pages goes to `/reports`.
 
 | Route | Component | Description |
 |-------|-----------|-------------|
-| `/esg` | `Reports` (hub page) | Report catalogue / landing page |
+| **`/reports`** | `Reports` (hub page) | Report catalogue / landing page (canonical hub URL) |
+| `/esg` | (optional) | Redirect to `/reports` or alias — hub may be implemented at `/esg`; prefer exposing as `/reports` |
 | `/esg/corporate` | `ESGReportPage` | Sustainability & Energy Report (full report view) |
 | `/esg/secr` | `SECRReportPage` | UK SECR Energy & Carbon Statement (preview mode) |
 | `/esg/advisor` | `ReportingAdvisor` | AI-powered reporting recommendations page |

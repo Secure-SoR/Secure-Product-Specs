@@ -2,9 +2,11 @@
 **Secure SoR — Data Library Module**
 *Version 1.0 | February 2026 | Owner: Anne*
 
+This spec follows [SPEC-TEMPLATE.md](SPEC-TEMPLATE.md) (10 required sections).
+
 ---
 
-## Overview
+## 1. Feature Overview
 
 The Data Library is the single source of structured activity data and evidence for the Secure platform. It is available at top-level navigation `/data-library`, gated by auth and the `data_library` module flag. A property selector filters context (cross-portfolio view).
 
@@ -21,9 +23,101 @@ The Data Library is the single source of structured activity data and evidence f
 
 **Planned (future):** A feature is to be built where a **human reviewer validates proofs** — e.g. a user reviews attached evidence and marks it as validated (or rejected), with status and audit trail. Not in current scope; schema and UI to be defined when the feature is scheduled.
 
+**Who uses it:** Account members (asset managers, sustainability teams, facility managers). Gated by auth and the `data_library` module flag. Property selector filters context (cross-portfolio).
+
+**Business problem:** Centralise activity data and evidence so dashboards, Emissions Engine, CoverageEngine, and reporting use one source of truth; avoid duplicate entry and conflicting numbers.
+
 ---
 
-## Routes
+## 2. Functional Requirements
+
+- User opens Data Library from sidebar → hub at `/data-library` with tabs: My Data, Shared Data, Connectors.
+- User selects property (optional) to filter context. User navigates to a category (Energy, Waste, Water, etc.) → category sub-page with table of records and "Add Data" / upload.
+- User creates or edits a record: form/dialog with required fields (name, subject_category, period, value, confidence, etc.); save → row in `data_library_records`. User attaches evidence: upload file → Storage + `documents` + `evidence_attachments` linked to record.
+- Emissions (scope-data) is read-only: user views Scope 1/2/3 breakdown; no "Add Data". Governance, Targets, ESG Disclosures, Certificates follow same record + evidence pattern with category-specific fields.
+- Expected system response: list/table reflects CRUD; evidence drawer shows attachments; CoverageEngine and Emissions Engine consume records for dashboards and reporting.
+
+---
+
+## 3. API Endpoints / Data Surface
+
+No REST API in backend repo. App uses **Supabase** directly:
+
+- **Tables:** `data_library_records`, `documents`, `evidence_attachments`. Queries filtered by `account_id` (and optionally `property_id`). RLS enforces account scope.
+- **Storage:** Bucket `secure-documents` for uploaded files; link via `evidence_attachments.data_library_record_id`.
+- **RPCs:** None required for core Data Library CRUD; optional future RPCs for bulk import or CoverageEngine.
+- **External:** Emissions Engine (internal service) consumes `data_library_records`; CoverageEngine reads records for completeness. Reporting Copilot (POST `/api/reporting-copilot`) receives context that may include data library coverage.
+
+---
+
+## 4. Database Schema
+
+See [docs/database/schema.md](../database/schema.md) for full definitions.
+
+- **data_library_records:** id, account_id, property_id, subject_category, name, source_type, confidence, value_numeric, value_text, unit, reporting_period_start, reporting_period_end, allocation_method, allocation_notes, created_at, updated_at, and other columns per schema. Indexes on account_id, property_id, subject_category.
+- **documents:** id, account_id, name, storage_path, file_type, created_at, etc. Links to Storage.
+- **evidence_attachments:** id, data_library_record_id, document_id, attachment_type, created_at, etc. Many-to-one record → many proofs.
+- **Relationships:** accounts → properties; data_library_records → property_id, account_id; evidence_attachments → data_library_records, documents.
+
+---
+
+## 5. Business Logic & Validation Rules
+
+- **subject_category:** Must be one of the canonical values (energy, waste, water, indirect_activities, governance, targets, esg, certificates, occupant_feedback). Used for filtering and layer assignment.
+- **confidence:** measured | allocated | estimated | cost_only — enforced in UI and optionally in DB constraint.
+- **source_type:** connector | upload | manual | rule_chain.
+- **One shared upload flow:** All "Add Data" / upload entry points must use the same component: create/select record → upload file → Storage + documents + evidence_attachments. No category-specific upload paths.
+- **Layer 2 (Emissions):** Read-only; no inserts into data_library_records for scope data. Values derived by Emissions Engine from Activity layer + factors.
+- **Allocation:** When allocation_method is set, allocation_notes should describe basis (e.g. area, headcount).
+
+---
+
+## 6. Authentication & Authorization
+
+- All Data Library routes behind **ProtectedRoute** (auth required). RLS on all tables: members can only access rows where `account_id` matches their account.
+- **Module flag:** `data_library` module must be enabled for the account (Account Settings → Modules). If disabled, hide or redirect Data Library entry.
+- **Access control (Taxonomy v3):** Per-tile access IDs can restrict which categories a user sees (e.g. governance, targets, esg). See table below.
+
+---
+
+## 7. State & Workflow
+
+- **Record lifecycle:** Create → Edit → (optional) Delete. No formal status field on records; audit trail via `audit_events` if enabled.
+- **Engine flow:** Activity records (data_library_records) → CoverageEngine (Complete / Partial / Unknown) → EmissionsEngine (Activity → Scope 1/2/3) → ControllabilityEngine → Dashboards & Recommendations. No state machine; engines read current snapshot.
+- **Report instance status** (Draft / Requested / In Review / Approved) lives in ESG Report module (localStorage or future report_versions table), not in Data Library.
+
+---
+
+## 8. Error Handling
+
+- **Validation:** Invalid subject_category or missing required fields → show inline validation; do not submit. Duplicate record (same property, category, period, name) → allow or show warning per product rule.
+- **RLS:** Unauthorised access returns empty set or 403; app should not expose raw Postgres errors. Show generic "Unable to load data" in UI.
+- **Upload:** File too large (e.g. >10MB) → reject with message. Unsupported type → reject. Storage failure → show "Upload failed; try again" and do not create evidence_attachment.
+- **No specific error codes** in backend; Supabase client errors surfaced as generic failure states in UI.
+
+---
+
+## 9. External Integrations & Events
+
+- **Emissions Engine:** Consumes `data_library_records` (Activity layer); produces Scope 1/2/3. No webhooks; app or batch job triggers calculation.
+- **CoverageEngine:** Reads records to compute Complete / Partial / Unknown per property/category.
+- **ControllabilityEngine:** Uses activity + boundary data for landlord/tenant attribution.
+- **Connectors (UI):** Power BI, Google Sheets, SAP, Envizi — currently mock/placeholder; no backend integration yet.
+- **Reporting Copilot:** POST `/api/reporting-copilot` (AI agent); app may pass data library coverage or record summaries in context. No events from Data Library to agent.
+
+---
+
+## 10. Non-Functional Requirements
+
+- **Performance:** List/table queries should be scoped by account_id and optionally property_id; index on (account_id, subject_category). Avoid unbounded selects.
+- **File size:** Upload limit 10MB per file (document in UI/Storage policy).
+- **Data retention:** No automatic purge defined in spec; retention policy for documents and records to be set at account or platform level.
+- **Logging:** Optionally log create/update/delete of records and evidence in `audit_events` (entity_type e.g. `data_library_record`, `evidence_attachment`) for audit trail.
+- **Security:** RLS on all tables; no cross-account access. Storage bucket policy must restrict access to account-scoped paths.
+
+---
+
+## Routes (reference)
 
 | Section | Route | Layer | Storage |
 |--------|-------|-------|---------|

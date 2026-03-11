@@ -30,9 +30,9 @@ Use this when you work in the **AI agent** project. The **backend repo** (Secure
 
 **Option A — Copy into agent repo:** Copy this entire folder into the agent repo (e.g. `agent/backend-instructions/` or `docs/backend-instructions/`). All references in these files point to other files **in this folder**, so the agent has a single self-contained instruction set.
 
-**Option B — Path in agent repo:** In the agent project, add a short README that says: "Context shape and DB alignment: read from the **backend repo** at [path]/Secure-SoR-backend/docs/handover-files-for-agent/. Start with README.md and INSTRUCTIONS.md; then CONTEXT-SOURCE.md and AGENT-TASKS.md."
+**Option B — Path in agent repo:** In the agent project, add a short README that says: "Context shape and DB alignment: read from the **backend repo** at [path]/Secure-SoR-backend/docs/for-agent/. Start with README.md and INSTRUCTIONS.md; then CONTEXT-SOURCE.md and AGENT-TASKS.md."
 
-**Option C — Cursor / AI instructions:** When you run the agent (or an AI in the agent repo), give it: "Use the files in [path]/handover-files-for-agent/ for context and API contract. Read README.md first, then INSTRUCTIONS.md, CONTEXT-SOURCE.md, AGENT-TASKS.md, BACKEND-SYNC-NOTES.md, and COVERAGE-AND-APPLICABILITY-FOR-AGENT.md. Apply the agent to whatever property context is sent; context is built from Supabase. When reasoning about water/heating completeness, use the coverage-and-applicability doc."
+**Option C — Cursor / AI instructions:** When you run the agent (or an AI in the agent repo), give it: "Use the files in [path]/for-agent/ for context and API contract. Read README.md first, then INSTRUCTIONS.md, CONTEXT-SOURCE.md, AGENT-TASKS.md, BACKEND-SYNC-NOTES.md, and COVERAGE-AND-APPLICABILITY-FOR-AGENT.md. Apply the agent to whatever property context is sent; context is built from Supabase. When reasoning about water/heating completeness, use the coverage-and-applicability doc."
 
 ---
 

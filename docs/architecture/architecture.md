@@ -15,6 +15,12 @@ This file is the authoritative architectural reference for Secure SoR.
 
 ---
 
+## Foundation and modules
+
+The **foundation** (platform surface that modules consume) comprises: **Data Library**, **Property section**, **Account settings / user profile**, **Evidence Store**, and **Boundary Engine**. All modules feed from this foundation; they may also consume other modules. The canonical module list and consumption logic are in [docs/modules/README.md](../modules/README.md) and [docs/modules/MODULE-LIST.md](../modules/MODULE-LIST.md). Strategy: [docs/sources/Secure_platform-strategy-building-data-infrastructure.md](../sources/Secure_platform-strategy-building-data-infrastructure.md) §1.
+
+---
+
 # 1. Current Architecture (As-Is: Lovable SPA)
 
 ## 1.1 Runtime & Application Structure

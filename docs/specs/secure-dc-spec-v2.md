@@ -8,6 +8,8 @@
 | **Owner** | Anne |
 | **Repo** | Secure-SoR-backend |
 
+This spec follows [SPEC-TEMPLATE.md](SPEC-TEMPLATE.md) (10 required sections). Mapping: §1 Feature Overview = §0–1 below; §2 Functional Requirements = §2–5 and screens; §3 API/Data Surface = §2.2 schema, §4 SitDeck; §4 Database Schema = §2.2, §4 tables; §5 Business Logic = §2–5 rules; §6 Auth = RLS/account; §7 State & Workflow = §3 space flow; §8 Error Handling = see §8 below; §9 External = SitDeck; §10 Non-Functional = see §10 below.
+
 ---
 
 ## 0. Executive Summary
@@ -52,6 +54,23 @@ The canonical Secure SoR layers remain unchanged. Data Centre is an **additive**
 - **Reuses:** properties, spaces, systems, meters, data_library_records, evidence_attachments, agent_runs, audit_events
 - **Extends:** asset_type enum, building_systems_taxonomy, space templates, dashboard module, agent context
 - **Adds:** dc_metadata table, dc_rack_assets table (SitDeck sync), dc_sensor_readings, dc_sync_log, sitdeck_risk_config, new dashboard pages
+
+---
+
+## 1. Feature Overview (SPEC-TEMPLATE §1)
+
+**Purpose:** Extend Secure SoR to support Data Centres as a first-class asset type: property/space template, DC dashboards (operational + SitDeck risk intelligence), and optional SitDeck DCIM integration. **Who uses it:** Asset managers, sustainability/ESG teams, operations (see §1.2). **Business problem:** DCs need PUE, capacity, cooling, water, and risk metrics with the same SoR, evidence, and audit model as other assets.
+
+**SPEC-TEMPLATE §2–10 (summary):**  
+- **§2 Functional Requirements:** See §2 (Property Creation), §3 (Spaces), §5 (Dashboards), §6 (SitDeck) for step-by-step flows and user actions.  
+- **§3 API / Data Surface:** Supabase tables (properties, spaces, dc_metadata, data_library_records); SitDeck API (see §4); no REST API in backend repo.  
+- **§4 Database Schema:** See §2.2 (dc_metadata), §4 (dc_rack_assets, dc_sensor_readings, dc_sync_log, sitdeck_risk_config); [docs/database/schema.md](../database/schema.md).  
+- **§5 Business Logic & Validation:** asset_type = 'data_centre' triggers DC metadata step; space types per §3; tenancy_type whole/partial; PUE/WUE calculations; SitDeck sync rules.  
+- **§6 Authentication & Authorization:** RLS on all tables by account_id; no extra roles; DC routes visible when account has ≥1 DC property.  
+- **§7 State & Workflow:** Property create → optional DC details step; space create with DC template; SitDeck sync (schedule or on-demand); dashboard read-only.  
+- **§8 Error Handling:** Validation on DC metadata form; SitDeck API failures → log and show sync status; no specific error codes in spec.  
+- **§9 External Integrations:** SitDeck DCIM (telemetry, rack/device, sync); SitDeck OSINT (risk intelligence).  
+- **§10 Non-Functional:** Dashboard queries scoped by property/account; index dc_metadata(property_id); SitDeck sync rate per API limits; logging for sync and audit.
 
 ---
 

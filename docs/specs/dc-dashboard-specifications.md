@@ -2,9 +2,11 @@
 **Secure SoR — Data Centre Asset Type**
 *Version 1.0 | March 2026 | Owner: Anne*
 
+This spec follows [SPEC-TEMPLATE.md](SPEC-TEMPLATE.md) (10 required sections).
+
 ---
 
-## Overview
+## 1. Feature Overview
 
 Data centre dashboards are a new module alongside the existing Energy, Carbon, Risk, and Governance dashboards. They are available only when an account has at least one property with `asset_type = 'data_centre'`.
 
@@ -12,6 +14,62 @@ Dashboards are split into two groups:
 
 - **Operational Dashboards** (Sections 1–6): Internal facility performance — PUE, capacity, cooling, energy, ESG
 - **Risk Intelligence Dashboards** (Sections 7–9): External situational intelligence via SitDeck OSINT integration
+
+**Who uses it:** Asset managers and operations for DC properties. **Business problem:** Single place to monitor PUE, capacity, cooling, water, ESG readiness, and external risk (geopolitical, climate, cyber) per DC property and portfolio.
+
+---
+
+## 2. Functional Requirements
+
+- User selects Asset Type = Data Centre (and optionally a property) in Dashboards filter → DC landing at `/dashboards/data-centre`. User sees portfolio overview or selects a property → property-level overview. User navigates to a specific dashboard (PUE, Capacity, Cooling, ESG, Geopolitical, Climate, Cyber) via tabs or links. Each dashboard shows KPI tiles and charts/tables as defined in sections below. Expected system response: data from dc_metadata, data_library_records, and (when wired) SitDeck; empty states when no data.
+
+---
+
+## 3. API Endpoints / Data Surface
+
+- **Supabase:** `properties`, `dc_metadata`, `data_library_records` (energy, water, etc.). Queries by account_id and property_id. No REST API in backend; app uses Supabase client. **SitDeck (optional):** External API for telemetry and OSINT; see [secure-dc-spec-v2.md](secure-dc-spec-v2.md) §4. Dashboards are read-only; no write endpoints.
+
+---
+
+## 4. Database Schema
+
+- **properties:** asset_type = 'data_centre', NLA, etc. **dc_metadata:** property_id, tier_level, design_capacity_mw, current_it_load_mw, target_pue, renewable_energy_pct, water_usage_effectiveness_target, etc. **data_library_records:** subject_category (energy, water, waste) for YTD and trend. See [docs/database/schema.md](../database/schema.md) and [secure-dc-spec-v2.md](secure-dc-spec-v2.md) §2.2.
+
+---
+
+## 5. Business Logic & Validation Rules
+
+- PUE = Total Facility Power ÷ IT Load; WUE = water / energy. Capacity utilisation = current_it_load_mw ÷ design_capacity_mw. Portfolio KPIs = aggregates (avg, sum) across DC properties. Risk dashboards: data from SitDeck OSINT when configured; else placeholder or empty. No user input on dashboards; display only.
+
+---
+
+## 6. Authentication & Authorization
+
+- All dashboard routes behind **ProtectedRoute**. RLS on properties, dc_metadata, data_library_records by account_id. User sees only DC properties in their account. No role-based restriction beyond account membership.
+
+---
+
+## 7. State & Workflow
+
+- No state machine. Dashboards reflect current snapshot of dc_metadata and data_library_records. SitDeck sync (if used) may run on schedule or on-demand; dashboard shows latest synced data. No multi-step workflow on dashboard pages.
+
+---
+
+## 8. Error Handling
+
+- If Supabase query fails, show inline error or empty state ("Unable to load data") per tile or chart. If SitDeck API unavailable, risk dashboards show placeholder or "Data unavailable". No specific error codes; generic user-facing messages.
+
+---
+
+## 9. External Integrations & Events
+
+- **SitDeck DCIM:** Telemetry for PUE, IT load, cooling (when integrated). **SitDeck OSINT:** Geopolitical, climate, cyber risk data for risk intelligence dashboards. No webhooks or events from dashboards to external systems; dashboards consume data only.
+
+---
+
+## 10. Non-Functional Requirements
+
+- **Performance:** Queries scoped by property_id and account_id; index dc_metadata(property_id). Avoid unbounded loads; paginate or limit table rows if needed. **Logging:** Optional audit log for dashboard view or export. **Security:** RLS only; no dashboard-specific rate limits in spec.
 
 ---
 

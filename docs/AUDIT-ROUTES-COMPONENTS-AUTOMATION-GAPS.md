@@ -4,6 +4,8 @@
 **Date:** From workspace analysis.  
 **Note:** Frontend code is not in this workspace; component and automation gaps are inferred from backend/agent docs and known issues (e.g. LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC, data-library-implementation-context).
 
+**Strategy reference:** [docs/sources/Secure_platform-strategy-building-data-infrastructure.md](sources/Secure_platform-strategy-building-data-infrastructure.md) defines the platform model (primitives, modules, horizons). §7 below maps that strategy to current state and to-dos.
+
 ---
 
 ## 1. Route alignment audit
@@ -167,8 +169,8 @@ Use this to decide what to do from the backend repo. Frontend (Lovable) and agen
 
 | Gap (from §3–4) | Owner | Backend action | Existing prompt / doc (if any) |
 |-----------------|--------|-----------------|---------------------------------|
-| **Spaces save → tiles not updating (DC)** | Lovable | None | [LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md](LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md); [LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md](LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md) |
-| **Data Readiness: only OPTIONS, no POST** | Lovable | None | [lovable-fix-data-readiness-post.md](lovable-fix-data-readiness-post.md) |
+| **Spaces save → tiles not updating (DC)** | Lovable | None | [LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md](lovable-prompts/LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md); [LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md](lovable-prompts/LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md) |
+| **Data Readiness: only OPTIONS, no POST** | Lovable | None | [lovable-fix-data-readiness-post.md](lovable-prompts/lovable-fix-data-readiness-post.md) |
 | **Spaces list not rendering (only count)** | Lovable | None | Same as first row; ensure one refetch/state for all asset types |
 | **Persist agent_runs / agent_findings** | Lovable | Schema exists ([schema.md](database/schema.md) §agent_runs, §agent_findings). No migration needed. | Add to Lovable prompt: after each successful agent response, insert into agent_runs and agent_findings |
 | **Upload + create record + attach (unified)** | Lovable | None | [data-library-implementation-context.md](data-library-implementation-context.md); wire all “Add Data” entry points to same flow |
@@ -187,6 +189,83 @@ Use this to decide what to do from the backend repo. Frontend (Lovable) and agen
 - Backend schema: [docs/database/schema.md](database/schema.md), [docs/database/supabase-schema.sql](database/supabase-schema.sql)
 - Implementation plan: [docs/implementation-plan-lovable-supabase-agent.md](implementation-plan-lovable-supabase-agent.md)
 - Data Library: [docs/data-library-implementation-context.md](data-library-implementation-context.md), [docs/sources/lovable-data-library-spec.md](sources/lovable-data-library-spec.md)
-- Spaces (DC): [LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md](LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md), [LOVABLE-PROMPT-DATA-CENTRE-SPACE-TEMPLATE.md](LOVABLE-PROMPT-DATA-CENTRE-SPACE-TEMPLATE.md), [LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md](LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md)
-- Data Readiness POST fix: [docs/lovable-fix-data-readiness-post.md](lovable-fix-data-readiness-post.md)
+- Spaces (DC): [LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md](lovable-prompts/LOVABLE-PROMPT-FIX-DC-SPACE-TEMPLATE-SYNC.md), [LOVABLE-PROMPT-DATA-CENTRE-SPACE-TEMPLATE.md](lovable-prompts/LOVABLE-PROMPT-DATA-CENTRE-SPACE-TEMPLATE.md), [LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md](lovable-prompts/LOVABLE-PROMPT-RESTORE-SPACES-UI-TENANT-AND-LANDLORD.md)
+- Data Readiness POST fix: [lovable-prompts/lovable-fix-data-readiness-post.md](lovable-prompts/lovable-fix-data-readiness-post.md)
+- **All Lovable prompts:** [lovable-prompts/README.md](lovable-prompts/README.md) (index by feature)
 - ESG Report (Sustainability Reporting): [docs/specs/esg-report-specifications.md](specs/esg-report-specifications.md) — routes `/esg`, `/esg/corporate`, `/esg/secr`, `/esg/advisor`; Reporting Copilot invoked from `/ai-agents`.
+- **Platform strategy:** [docs/sources/Secure_platform-strategy-building-data-infrastructure.md](sources/Secure_platform-strategy-building-data-infrastructure.md) — primitives, modules, horizons, GTM; use for alignment and roadmap.
+
+---
+
+## 7. Strategy alignment — where we are and what we need to build
+
+**Source:** [docs/sources/Secure_platform-strategy-building-data-infrastructure.md](sources/Secure_platform-strategy-building-data-infrastructure.md). This section maps the strategy to current specs/schema and lists gaps and to-dos in one place.
+
+### 7.1 Is the strategy file in the right place?
+
+**Yes.** Strategy and positioning docs belong in **`docs/sources`**. They are reference/input material: they inform specs and roadmap but are not the canonical implementation spec. Canonical behaviour lives in `docs/specs/` and schema in `docs/database/`. See [docs/sources/README.md](sources/README.md) and [CURSOR-MEMORY-AND-WORKFLOW.md](CURSOR-MEMORY-AND-WORKFLOW.md) § Difference between docs/sources and docs/specs.
+
+### 7.2 Platform primitives (strategy §1.1) vs current state
+
+| Primitive | Strategy definition | Current state (schema + specs) | Gap / note |
+|-----------|---------------------|--------------------------------|------------|
+| **Property Graph** | Spaces, systems, meters, end-use nodes, IoT. Physical building as structured model. | `properties`, `spaces`, `systems`, `meters`, `end_use_nodes` in schema; DC template in [secure-dc-spec-v2.md](specs/secure-dc-spec-v2.md); building-systems taxonomy, end-use nodes spec. | **Aligned.** IoT/sensors referenced; dedicated IoT table or SitDeck sync per DC spec. |
+| **Stakeholder Registry** | Accounts, roles, boundary relationships. Who controls/pays/reports. | `accounts`, `account_memberships`; roles in app. Boundary logic in [landlord-tenant-boundary-logic.md](architecture/landlord-tenant-boundary-logic.md). | **Aligned.** Multi-stakeholder “data exchange” as product (invite landlord, FM) may be partial in UI. |
+| **Evidence Store** | Documents with provenance, confidence, audit. | `documents`, `evidence_attachments`, Storage bucket; Data Library spec. | **Aligned.** Human proof validation (future) noted in Data Library spec. |
+| **Activity Data** | Utility readings, consumption, waste. Structured by source, confidence, period. | `data_library_records`; Data Library spec (energy, waste, water, indirect, etc.). | **Aligned.** |
+| **Boundary Engine** | Attribution: control, billing, metering → who owns what. | Logic in architecture docs; agent `/api/boundary`. No dedicated “boundary” table; uses Property Graph + Activity. | **Aligned.** Persist boundary output / pass to Reporting Copilot per §5. |
+| **Coverage Engine** | Completeness: what exists, missing, estimated. Per property, per period. | Referenced in handover/agent docs; CoverageEngine logic not a single service in repo. | **Gap:** No single “Coverage Engine” spec or API; completeness implied in Data Library and agent context. Consider doc that frames Coverage as a primitive and maps to current logic. |
+| **Emissions Engine** | Scope 1/2/3 from activity; deterministic, traceable. | Referenced in Data Library and ESG spec; sources/Secure_Emissions_Engine_*. Schema: emission tables optional. | **Gap:** Emissions Engine as a documented primitive (inputs, outputs, versioning) and any emission_calculation_runs / line_items schema to be explicit in schema.md if used. |
+| **Audit Trail** | Append-only log of every data mutation. | `audit_events` table; RLS and triggers. | **Aligned.** Ensure agent runs and report exports write to audit_events where strategy requires (see §5). |
+
+### 7.3 Strategy §6 “What This Means for the Repo” — alignment
+
+| Strategy item | Current state | Gap / to-do |
+|---------------|---------------|-------------|
+| **1. Canonical spec frames data matrix primitives explicitly** | Schema and data-model docs exist; architecture has domain entities. Primitives (Property Graph, Stakeholder Registry, etc.) are not named as such in one canonical doc. | **To-do:** Add or update an architecture doc (or schema overview) that explicitly maps strategy primitives to schema and specs (one table: Primitive → tables/specs). |
+| **2. Architecture docs describe platform layer vs module layer** | [architecture/architecture.md](architecture/architecture.md) describes current stack and domain; no explicit “platform (primitives) vs modules (applications)” split. | **To-do:** Add a short section “Platform vs modules” that lists primitives as platform and Compliance Tracker, Risk Diagnosis, Sustainability Reporting, Data Exchange, AI Agents as modules that consume them. |
+| **3. API design — modules consume primitives via clean interfaces** | No REST API in repo; app uses Supabase client directly. Strategy says modules should consume via API. | **Gap (future):** When opening to third parties or multi-service, define API layer (e.g. REST or GraphQL) over primitives. Not required for current single-app setup; document as Horizon 2+ intent. |
+| **4. Schema documentation as publishable artefact** | schema.md, supabase-schema.sql, taxonomy docs exist. | **To-do:** If “schema as product” is pursued, maintain a single publishable schema spec (versioned, e.g. Secure_Building_Data_Schema_v1.md in sources or a dedicated folder) and link from strategy. |
+| **5. Module boundaries — what’s primitive vs module** | Specs are feature-focused (Data Library, ESG Report, DC). No single “module map” that says “Compliance Tracker consumes X, strengthens Y”. | **To-do:** Add a “Module map” table (module name → primitives consumed, primitives strengthened, spec doc) to architecture or to this audit doc, using strategy §1.2–1.3 and §8.3 as source. |
+
+### 7.4 Platform modules vs current implementation
+
+**Canonical module list (with status):** [docs/modules/MODULE-LIST.md](modules/MODULE-LIST.md). Summary below.
+
+| Module | Strategy: requires / strengthens | Status | Current implementation | Gap / to-do |
+|--------|----------------------------------|--------|-------------------------|------------|
+| **Reports** | Emissions, Activity Data, Evidence, Boundary, Audit | **Partial** | ESG Report (hub, corporate, SECR, advisor). | Wire to real data; persist report instance; extend to full Reports (GRESB, etc.). |
+| **Projects** | Property Graph, Activity Data, Emissions | **Pending** | — | Implement (ROI / Retrofit Scenarios). |
+| **Net Zero** | Activity Data, Emissions, Evidence | **Pending** | — | Implement (decarbonisation pathway). |
+| **Stakeholders Management** | Stakeholder Registry, Boundary Engine | **Pending** | Landlord/tenant boundary; invite/data exchange may be partial. | Confirm UI; build full Stakeholder Data Exchange. |
+| **Asset Tracking** | Property Graph | **Pending** | Systems register, meters. | Implement as module (asset lifecycle). |
+| **Digital Twin** | Property Graph, Activity Data | **Pending** | — | Implement. |
+| **Automation** | All (cross-cutting) | **Pending** | — | Implement (workflows, triggers). |
+| **AI Agents** | All primitives (read) → Coverage | **Built** | Data Readiness, Boundary, Action Prioritisation, Reporting Copilot. | Fix POST (§3.1); persist agent_runs/agent_findings (§3.2). |
+| **Diagnosis** | All primitives → Property Graph | **Pending** | — | Implement (Risk Diagnosis). |
+| **Risk & Finance** | All, risk/finance | **Pending** | — | Implement. |
+| **Valuation Impact** | Risk Diagnosis, Compliance, Property Graph | **Pending** | — | Implement (or third-party). |
+
+
+### 7.5 Combined to-do: implementation gaps + strategy-driven items
+
+Use this as the single checklist for “where we are and what we need to build.” Items from §3–5 (implementation) and §7.2–7.4 (strategy) are merged; owner and doc references are in §5.
+
+| # | To-do | Source | Owner | Priority |
+|---|-------|--------|-------|----------|
+| 1 | Spaces save → summary tiles update (DC); spaces list render; single refetch/state for all asset types | §3.1, §4.3 | Lovable | Broken |
+| 2 | Data Readiness: send POST with context (not only OPTIONS) | §3.1 | Lovable | Broken |
+| 3 | Persist agent_runs and agent_findings after each agent call | §3.2, strategy (Audit Trail) | Lovable | Missing |
+| 4 | One shared upload + “extract from CSV” flow for all Data Library / Add Data entry points | §3.2, §4.2 | Lovable | Missing |
+| 5 | Use insert_system_from_register RPC for building systems register import | §3.2 | Backend + Lovable | Missing |
+| 6 | Pass dataReadinessOutput and boundaryOutput to Reporting Copilot when available | §3.2 | Lovable | Missing |
+| 7 | Wire ESG Report Energy & Carbon, Scope 3, Waste & Water to real data; persist report instance to Supabase | §7.4, esg-report-spec | Lovable + Backend | Missing |
+| 8 | Clear agent results on property change; optional Run-all endpoint | §3.3 | Lovable / Agent | Cosmetic / optional |
+| 9 | **Strategy:** Doc that maps primitives (Property Graph, Stakeholder Registry, …) to schema and specs | §7.3 | Backend | Strategy |
+| 10 | **Strategy:** Architecture “Platform vs modules” section (primitives vs Compliance Tracker, Risk, Reporting, etc.) | §7.3 | Backend | Strategy |
+| 11 | **Strategy:** Module map table (module → primitives consumed, strengthened, spec) — see [docs/modules/MODULE-LIST.md](modules/MODULE-LIST.md) | §7.3 | Backend | Strategy |
+| 12 | **Strategy:** Confirm or build Stakeholder Data Exchange (invite landlord, structured requests) | §7.4 | Product + Lovable | Strategy |
+| 13 | **Strategy:** Coverage Engine and Emissions Engine as explicit primitives (doc + schema if needed) | §7.2 | Backend | Strategy |
+| 14 | **Pending modules (roadmap):** Projects, Net Zero, Stakeholders Management, Asset Tracking, Digital Twin, Automation, Diagnosis, Risk & Finance, Valuation Impact — see [docs/modules/MODULE-LIST.md](modules/MODULE-LIST.md) | §7.4 | Product + Eng | Roadmap |
+
+**Backend-only next steps:** (1) Run insert_system_from_register migration if not done. (2) Add or update architecture doc with primitives map and platform-vs-modules. (3) Module map and full module list with status are in [docs/modules/MODULE-LIST.md](modules/MODULE-LIST.md); reference from architecture if desired. (4) Optionally add publishable schema artefact and Coverage/Emissions primitive docs when prioritised.
