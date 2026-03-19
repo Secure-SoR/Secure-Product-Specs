@@ -212,6 +212,329 @@ The Data Library property dropdown must drive the data: when the user selects a 
 
 ---
 
+### Lovable prompt: Rename landing tile to “Indirect Activities (Scope 3)”
+
+On the Data Library landing page (`/data-library`) “My Data” tile grid, rename the tile label:
+
+- From: `Indirect Activities`
+- To: `Indirect Activities (Scope 3)`
+
+The tile should still link to the same route (`/data-library/indirect-activities`) and use the same underlying category/subject routing as before; this change is only the displayed label text.
+
+```
+On `/data-library`, update the My Data tile label:
+  - Tile label text: “Indirect Activities” -> “Indirect Activities (Scope 3)”
+  - Route remains `/data-library/indirect-activities`
+  - Do not change the subject_category or route behaviour.
+```
+
+---
+
+### Lovable prompt: Year dropdown in page header (Energy, Waste, Indirect Activities)
+
+Add a **year dropdown** to the page header of the following Data Library section pages:
+
+- `/data-library/energy`
+- `/data-library/waste`
+- `/data-library/indirect-activities`
+
+The dropdown must default to the current reporting year (from `account.reporting_boundary`), filter all records and coverage stats on the page to the selected year, and allow the user to override the year per page independently.
+
+```
+Add a year dropdown to the page header of these Data Library section pages: /data-library/energy, /data-library/waste, /data-library/indirect-activities.
+
+1. **Default year:** When the page loads, the dropdown should default to the current reporting year from account.reporting_boundary (e.g. reportingBoundary.reportingYear or the year from reportingPeriodStart). If the account has no reporting_boundary or reporting year, fall back to the current calendar year.
+
+2. **Per-page state:** Each page (/energy, /waste, /indirect-activities) has its own year selection state. Changing the year on Energy does not change the year on Waste or Indirect Activities. The user can override the year independently on each page.
+
+3. **Filter records and coverage:** All records (from data_library_records) and coverage stats shown on the page must filter to the selected year. For example: filter records where reporting_period_start is within the selected year (e.g. reporting_period_start >= YYYY-01-01 AND reporting_period_start <= YYYY-12-31). Apply the same year filter to any coverage summary, tiles, or aggregated stats.
+
+4. **Dropdown options:** Offer years from a sensible range (e.g. current year ± 2–3 years, or derive from distinct years in the data). Include the current reporting year. Sort chronologically (newest first or oldest first — be consistent).
+
+5. **Refetch on change:** When the user changes the selected year, refetch the page’s records and coverage data with the new year filter. Update the query dependency (e.g. useEffect or React Query key) so the year selection triggers a refetch.
+
+6. **Display:** Place the year dropdown in the page header (near the property selector if present) so it is visible and easy to change.
+```
+
+**Quick check:** Select year 2025 on Energy; select year 2026 on Waste. Each page shows only records for its selected year. Changing Energy to 2026 does not change Waste’s selection.
+
+---
+
+### Lovable prompt: Wire year dropdown to all components (accordions, records, coverage)
+
+Use this when the year dropdown exists on `/data-library/energy`, `/data-library/waste`, or `/data-library/indirect-activities` but changing the year does **not** update the data shown in accordions, records lists, or coverage stats. The dropdown must drive every component that displays data on the page.
+
+```
+On /data-library/energy, /data-library/waste, and /data-library/indirect-activities: ensure the page-level year dropdown is the single source of truth and that ALL data on the page filters to the selected year.
+
+1. **Single source of truth**
+   - The selected year (from the page header dropdown) must be in React state or context so every component can read it.
+   - Every query or data fetch that loads records, coverage, or aggregated stats must receive the selected year and filter by it.
+
+2. **What must filter to the selected year**
+   - **Records lists** (inside accordions or elsewhere): filter data_library_records by reporting_period_start (or reporting_period_end) falling within the selected year.
+   - **Coverage stats / tiles** (e.g. "Complete", "Partial", "Unknown" per component): recalculate using only records for the selected year.
+   - **Accordion content**: each accordion section (e.g. Electricity, Gas, District Heating under Energy) must show only records and stats for the selected year.
+   - **Empty states** and **"Add data" prompts** within accordions: base counts and messaging on the selected year.
+
+3. **Query dependency**
+   - Include the selected year in the dependency array of useQuery / useEffect / useMemo (or equivalent) for every data fetch on the page.
+   - When the user changes the year, all queries must refetch with the new year filter. No component should display data for a different year than the dropdown shows.
+
+4. **No orphaned data**
+   - If any accordion, card, or list shows data without using the year from the page dropdown, wire it up. There must be no component that ignores the selected year.
+```
+
+**Quick check:** Change the year dropdown from 2025 to 2026. Every accordion, records list, and coverage stat on the page updates to 2026 data.
+
+---
+
+### Lovable prompt: Add Data vs accordion shortcuts (Energy, Waste, Indirect Activities)
+
+On `/data-library/energy`, `/data-library/waste`, and `/data-library/indirect-activities`, keep two levels of entry visually and functionally distinct: the page-level **Add Data** is the primary CTA; accordion-level actions are smaller secondary shortcuts pre-scoped to that accordion.
+
+```
+On these Data Library section pages only: /data-library/energy, /data-library/waste, /data-library/indirect-activities.
+
+1. **Page-level "Add Data" (unchanged)**
+   - Keep the existing page-level "Add Data" button as the primary CTA: filled / solid style using the accent (primary) colour.
+   - Behaviour unchanged: it opens the full modal where the user selects component and sub-component (general data entry path).
+
+2. **Accordion-level actions (rename + restyle)**
+   - Inside each accordion section, rename and style the two shortcut actions:
+     - File upload action → label **"Upload"** (secondary / outlined variant, smaller than the page-level button, e.g. size="sm" or equivalent).
+     - Structured data entry action → label **"Manual Entry"** (secondary / outlined variant, smaller than the page-level button).
+   - These shortcuts should open the same underlying upload / manual flows as today, but pre-scoped to that accordion’s component (or sub-component) where applicable — do not change behaviour except labels and styling unless needed for consistency.
+
+3. **Visual hierarchy**
+   - The page-level Add Data must read as the main action; accordion buttons must not compete visually (no filled primary style on accordion row).
+   - Rationale for copy: page-level = general entry; accordion-level = shortcuts for that section only.
+```
+
+**Quick check:** Add Data is large and filled; each accordion shows small outlined "Upload" and "Manual Entry".
+
+---
+
+### Lovable prompt: Year dropdown on Emissions (Calculated) / scope-data with inherited default
+
+On `/data-library/scope-data` (Emissions Calculated), add a year dropdown that inherits its default from the section page when the user navigates from Energy, Waste, or Indirect Activities — and allows the user to change the year in-place. When the user navigates directly to scope-data, default to the account's current reporting year.
+
+```
+On /data-library/scope-data (Emissions Calculated), add a year dropdown that:
+
+1. **Inherited default when navigated from a section page:**
+   - When the user navigates TO scope-data FROM /data-library/energy, /data-library/waste, or /data-library/indirect-activities, the year dropdown must default to the year the user had selected on that section page.
+   - Pass the year via one of:
+     - URL query param: e.g. /data-library/scope-data?year=2025
+     - Shared context/state: e.g. a Data Library context that holds the section page's selected year
+   - Update links/buttons on Energy, Waste, and Indirect Activities that navigate to scope-data (or "Emissions Calculated") so they include the current section year (e.g. <Link to={`/data-library/scope-data?year=${selectedYear}`}> or push the year into context before navigate).
+
+2. **In-page year dropdown (editable):**
+   - The page must have its own year dropdown that the user can change without navigating away.
+   - Once the page loads (with the inherited or direct default), the user can change the year in this dropdown. The dropdown drives the emissions data shown (Scope 1/2/3 breakdown, totals, etc.).
+   - All emissions data, scope breakdown, and coverage stats on the page must filter to the selected year. Refetch when the user changes the year.
+
+3. **Direct navigation default:**
+   - When the user navigates directly to /data-library/scope-data (e.g. via URL bar, bookmark, or a link that does not come from Energy/Waste/Indirect Activities), default the year dropdown to the account's current reporting year from account.reporting_boundary (e.g. reportingYear or year from reportingPeriodStart). Fall back to current calendar year if no reporting boundary is set.
+
+4. **Single source of truth on the page:**
+   - Use one year state on the scope-data page. The initial value comes from (a) URL param/context when navigated from a section, or (b) account reporting year when direct. After that, the dropdown controls the state and the user can change it independently.
+
+5. **Placement:** Place the year dropdown in the page header (e.g. near the page title or property selector) so it is visible and easy to change.
+```
+
+**Quick check:**
+- On Energy, select year 2025 → click through to Emissions (scope-data) → year dropdown shows 2025 and data is for 2025.
+- Change the dropdown on scope-data to 2026 → data updates to 2026.
+- Open /data-library/scope-data directly in a new tab → year defaults to account reporting year.
+
+---
+
+### Lovable prompt: Connect Platform must be property-filtered (or block on All)
+
+On `/data-library`, the **Add Data** dropdown has an option **“Connect Platform”**. When the user clicks it, it must open the **Connectors panel** filtered to the property currently selected in the Data Library header property dropdown.
+
+Use this when the Connectors panel is not scoped to the selected property, or when “All Properties” incorrectly opens connectors without a specific property.
+
+```
+Implement “Connect Platform” in the Data Library Add Data dropdown so connectors are scoped to the selected property.
+
+1. Read the current property selection
+   - There is a property dropdown in the Data Library header with values like specific properties and an option “All Properties”.
+   - Use the selected value to compute:
+     - selectedPropertyId = UUID when a specific property is selected
+     - selectedPropertyId = null (or equivalent) when “All Properties” is selected
+
+2. Behaviour of “Connect Platform”
+   - If selectedPropertyId is null (user chose “All Properties”):
+     - Do NOT open the connectors panel.
+     - Show a prompt/toast/modal: “Please select a specific property before connecting a platform.”
+     - Focus the property selector.
+   - If a specific property is selected (selectedPropertyId is not null):
+     - Open the Connectors panel (the “Connectors” tab/panel on `/data-library`).
+     - Pass selectedPropertyId (and optionally property name) into the connectors panel view state.
+
+3. Connectors panel filtering
+   - When listing connector configs/integrations inside the Connectors panel:
+     - Filter by account_id = currentAccountId
+     - Filter by property_id = selectedPropertyId (or omit property filter only if your product explicitly supports account-level connectors; in this flow it should be property-scoped)
+   - Any “Add connector” / “Connect” action must create/update connector configuration rows associated with property_id = selectedPropertyId.
+
+4. Consistency
+   - The Connectors panel must use the same property selection state as the rest of Data Library tiles (so you never show connectors for a different property than the selected scope).
+
+Quick check:
+- Select property “140 Aldersgate” → click Add Data → Connect Platform → connectors panel opens showing only connectors tied to 140 Aldersgate.
+- Select “All Properties” → click Connect Platform → you see “Please select a specific property…” and no connectors panel opens.
+```
+
+---
+
+### Lovable prompt: Upload Documents auto-detect category, property-scoped, allow override
+
+On the `/data-library` page, the **Add Data** dropdown has an option **“Upload Documents”**. When clicked, it must:
+
+- Accept **any file type** (you may still enforce a max size like 10MB per file).
+- Upload the file **against the currently selected property** in the page dropdown.
+- If the user selected **“All Properties”**, prompt the user to select a specific property first (and do not upload).
+- After upload, **auto-detect the document category** (e.g. invoice, certificate, policy, contract, methodology, report).
+- Place the file into the correct **storage folder** for that detected category.
+- Allow the user to **override** the detected category before finalising.
+
+Use this when Upload Documents is not property-scoped, or when it uploads into the wrong category/folder, or when the detection/override behaviour is missing.
+
+```
+Implement “Upload Documents” in Data Library so it is property-scoped and auto-detects document category.
+
+1. Gate on property selection
+   - When the user clicks “Upload Documents” from the `/data-library` hub, read the property dropdown in the header.
+   - If the property dropdown is “All Properties” (selectedPropertyId is null):
+     - Block upload.
+     - Show a prompt/toast/modal: “Please select a specific property before uploading documents.”
+     - Do not open the file picker (or cancel the upload flow).
+   - If a specific property is selected:
+     - Continue with upload.
+
+2. Open the file picker
+   - Accept “any file type” (do not restrict by mime type in the file picker).
+   - Enforce a size limit (e.g. max 10MB per file) if you already have one.
+   - Support single file upload for MVP; optionally support multi-file upload.
+
+3. Auto-detect document category after the user selects a file
+   - Detect based on file name and any available metadata (and optionally OCR/text extraction later).
+   - Produce a result object with:
+     - detectedCategory: one of [invoice, certificate, policy, contract, methodology, report, other]
+     - (optional) detectedSubjectCategory: one of [energy, water, waste, indirect_activities, certificates, governance, esg, targets, occupant_feedback] or null if uncertain
+   - Example heuristics:
+     - If file name contains EPC, BREEAM, LEED, ISO → certificate
+     - If file name contains “policy”, “sustainability policy”, “code of conduct” → policy (governance/esg depending on content)
+     - If file name contains “invoice”, “bill”, “statement”, and contains “electricity/heating/water” keywords → invoice
+     - If file name contains “invoice” and contains “waste/recycling/tonnes” keywords → invoice
+     - Otherwise → other
+
+4. Let the user override before creating the record
+   - Show a small confirmation step:
+     - “Detected type: <detectedCategory>” (dropdown/select)
+     - Allow user to change detected type/category to the correct one.
+     - If you also detect detectedSubjectCategory, allow override for destination subject/category (or route) too.
+
+5. Persist to Supabase + Storage
+   - Create a new `data_library_records` row:
+     - account_id = currentAccountId
+     - property_id = selectedPropertyId
+     - subject_category = chosen destination subject category (or a safe default like `governance`/`energy` if unknown)
+     - source_type = 'upload'
+     - name = derive from file name (e.g. strip extension) + optional detected month/year
+     - confidence = default measured/allocated/estimated is fine for now; if you have no numeric confidence, use an appropriate default (e.g. measured) consistent with your existing upload flow
+     - reporting_period_start/end = null unless you can reliably detect them
+   - Upload the file to Storage under a folder that includes category:
+     - `account/{accountId}/property/{propertyId}/{yyyy}/{mm}/{detectedOrOverriddenCategory}/{documentId}-{fileName}`
+   - Insert into `documents` with the storage path.
+   - Insert into `evidence_attachments` linking the new record to the document.
+     - Set evidence tag to the chosen category/type (if `evidence_attachments.tag` exists); otherwise store the override in description/notes if supported.
+
+6. Refetch and show the new record
+   - After insert, refetch the relevant tiles/tables so the uploaded document appears immediately in the correct category view.
+
+Quick check:
+- Select a specific property → Upload Documents with a PDF named like “Electricity Invoice Jan 2026”.
+- The flow should detect “invoice”, let you override, upload into the correct storage folder, and create a record tied to that property.
+- Select “All Properties” and try “Upload Documents” → it must block with a prompt to select a specific property.
+```
+
+---
+
+### Lovable prompt: Manual Entry modal with cascading component → sub-component dropdowns (reuse existing forms)
+
+On `/data-library`, the **Add Data** dropdown has an option **“Manual Entry”**. When clicked, open a modal with two cascading dropdowns:
+
+- Dropdown 1 — Component:
+  - Energy & Utilities | Waste & Recycling | Indirect Activities | Certificates | Governance & Accountability | Targets & Commitments | ESG Disclosures
+- Dropdown 2 — Sub-component (changes based on Dropdown 1 selection):
+  - Energy & Utilities → Tenant Electricity | Landlord Utilities (Service Charge) | Heating | Water
+  - Waste & Recycling → General Waste | Recycled (Plastic) | Recycled (Paper/Card) | Recycled (Metal) | Recycled (Glass) | Composted | Hazardous
+  - Indirect Activities → Employee Commuting | Business Travel (Flights) | Business Travel (Rail) | Upstream Energy | Purchased Goods
+  - Certificates → EPC | BREEAM | LEED | ISO 50001 | ISO 14001 | WELL | Fitwel
+  - Governance & Accountability → Oversight | Policy | Risk Management | Engagement | Accountability
+  - Targets & Commitments → Carbon | Energy | Waste | Water
+
+Once both dropdowns are selected, the fields below them must update to match the fields on that component's page **exactly**. Reuse the existing component-level form components — do NOT create new ones.
+
+```
+Implement “Manual Entry” in the Data Library Add Data dropdown as a modal with cascading dropdowns and exact field parity.
+
+1. Gate on property selection
+   - If the Data Library header property dropdown is set to “All Properties” (account-wide):
+     - Do NOT open the modal.
+     - Prompt/toast/modal: “Please select a specific property before manual entry.”
+   - If a specific property is selected:
+     - Store selectedPropertyId and use it for record creation.
+
+2. Modal structure
+   - Dropdown 1 (Component) options (in this exact order):
+     - Energy & Utilities
+     - Waste & Recycling
+     - Indirect Activities
+     - Certificates
+     - Governance & Accountability
+     - Targets & Commitments
+     - ESG Disclosures
+   - Dropdown 2 (Sub-component) options:
+     - Energy & Utilities → Tenant Electricity | Landlord Utilities (Service Charge) | Heating | Water
+     - Waste & Recycling → General Waste | Recycled (Plastic) | Recycled (Paper/Card) | Recycled (Metal) | Recycled (Glass) | Composted | Hazardous
+     - Indirect Activities → Employee Commuting | Business Travel (Flights) | Business Travel (Rail) | Upstream Energy | Purchased Goods
+     - Certificates → EPC | BREEAM | LEED | ISO 50001 | ISO 14001 | WELL | Fitwel
+     - Governance & Accountability → Oversight | Policy | Risk Management | Engagement | Accountability
+     - Targets & Commitments → Carbon | Energy | Waste | Water
+     - ESG Disclosures → (use the sub-types that already exist on the ESG page; do not invent new ones)
+
+3. Render the existing component-level manual-entry form (no new form components)
+   - After Dropdown 1 + Dropdown 2 are selected:
+     - Render the exact existing form component used on the relevant page/sub-section.
+     - The rendered fields must match the page’s fields exactly (labels, required fields, default confidence values, period inputs, unit behaviour, validation messages).
+   - Do not create a “generic manual entry form” when a component-specific form already exists.
+
+4. Submission behaviour (use the reused form’s submit handler)
+   - When the reused form submits:
+     - Create one `data_library_records` row with:
+       - account_id = currentAccountId
+       - property_id = selectedPropertyId
+       - source_type = 'manual'
+       - subject_category + data_type (or equivalent discriminator) matching the chosen sub-component
+       - all period/value/confidence fields exactly as the component-specific form expects
+     - Close the modal.
+     - Refetch the relevant Data Library tile/table so the new record appears in the correct component section.
+
+5. Consistency requirement
+   - Reuse components, don’t duplicate UI.
+   - The only responsibility of this modal is: choose target component via dropdowns, then render the correct existing form component below.
+
+Quick check:
+- Select: Energy & Utilities → Tenant Electricity.
+- The modal fields must be identical to the Tenant Electricity manual entry on the Energy page.
+- Submit: record appears only for the selected property (not across properties).
+```
+
 ### Lovable prompt: Restore Add/Upload buttons and Energy page sections
 
 Use this when **Add Data / Upload buttons were removed** from Data Library pages or when the **Energy page lost its component sections** (Tenant Electricity, Landlord Utilities, Scope 1, Heating, Water). Paste into Lovable to restore them while keeping data from Supabase.
