@@ -22,6 +22,9 @@ All ready-to-paste prompts and fix instructions for the Lovable (frontend) app l
 | [LOVABLE-PROMPT-DASHBOARDS-FILTER-AND-DC.md](LOVABLE-PROMPT-DASHBOARDS-FILTER-AND-DC.md) | Dashboards filter bar + DC dashboards |
 | [LOVABLE-PROMPT-DC-DASHBOARDS-NAV-AND-FULL-SPEC.md](LOVABLE-PROMPT-DC-DASHBOARDS-NAV-AND-FULL-SPEC.md) | DC dashboards navigation + full spec |
 | [LOVABLE-PROMPT-DC-DASHBOARDS-UI-PER-SPEC.md](LOVABLE-PROMPT-DC-DASHBOARDS-UI-PER-SPEC.md) | DC dashboards UI per spec |
+| [LOVABLE-PROMPT-AGENT-CONTEXT-DATA-CENTRE.md](LOVABLE-PROMPT-AGENT-CONTEXT-DATA-CENTRE.md) | Agent POST body: `dcMetadata` + `propertyAssetType` for `data_centre` properties |
+| [LOVABLE-PROMPT-SITDECK-INTEGRATIONS-ACCOUNT-SETTINGS.md](LOVABLE-PROMPT-SITDECK-INTEGRATIONS-ACCOUNT-SETTINGS.md) | SitDeck connector in **Data Library → Connectors** (legacy filename); `sitdeck_risk_config`; token via Vault/Edge Function (Phase 3). **Same file:** [../specs/LOVABLE-PROMPT-SITDECK-INTEGRATIONS-ACCOUNT-SETTINGS.md](../specs/LOVABLE-PROMPT-SITDECK-INTEGRATIONS-ACCOUNT-SETTINGS.md) |
+| [LOVABLE-PROMPT-PROPERTY-LAT-LNG.md](LOVABLE-PROMPT-PROPERTY-LAT-LNG.md) | Latitude / longitude on Integrations & Evidence or property settings → `properties.latitude` / `longitude` (Phase 3, SitDeck maps). **Same file:** [../specs/LOVABLE-PROMPT-PROPERTY-LAT-LNG.md](../specs/LOVABLE-PROMPT-PROPERTY-LAT-LNG.md) |
 
 ### Spaces (all property types)
 
@@ -73,6 +76,12 @@ All ready-to-paste prompts and fix instructions for the Lovable (frontend) app l
 |------|---------|
 | [nodes-implementation.md](nodes-implementation.md) | End-use nodes CRUD and seed/upload |
 
+### Asset Tracking
+
+| File | Purpose |
+|------|---------|
+| [LOVABLE-PROMPT-ASSET-TRACKING.md](LOVABLE-PROMPT-ASSET-TRACKING.md) | Ordered paste prompts: routes, property tab, admin, devices, live, alerts, analytics, hooks |
+
 ---
 
 ## Where specs link to prompts
@@ -81,3 +90,5 @@ All ready-to-paste prompts and fix instructions for the Lovable (frontend) app l
 - **ESG Report:** [specs/esg-report-specifications.md](../specs/esg-report-specifications.md) has an inline “Prompt to paste” section for future updates; hub/back button prompt is here.
 - **Data Library:** [specs/data-library-specifications.md](../specs/data-library-specifications.md), [data-library-implementation-context.md](../data-library-implementation-context.md)
 - **Audit (gaps and next steps):** [AUDIT-ROUTES-COMPONENTS-AUTOMATION-GAPS.md](../AUDIT-ROUTES-COMPONENTS-AUTOMATION-GAPS.md) §5 links each gap to the relevant prompt in this folder.
+- **Asset Tracking:** [specs/secure-asset-tracking-spec-v2.0.md](../specs/secure-asset-tracking-spec-v2.0.md) Appendix B; implementation prompts consolidated in [LOVABLE-PROMPT-ASSET-TRACKING.md](LOVABLE-PROMPT-ASSET-TRACKING.md).
+- **DC agent context:** [specs/implementation-guide-agent-context-data-centre.md](../specs/implementation-guide-agent-context-data-centre.md); **full SQL + Lovable text in one page:** [specs/data-centre-agent-context-COPY-PASTE.md](../specs/data-centre-agent-context-COPY-PASTE.md); contract [architecture/agent-context-data-centre.md](../architecture/agent-context-data-centre.md).

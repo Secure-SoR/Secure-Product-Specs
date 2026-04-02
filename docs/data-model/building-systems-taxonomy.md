@@ -104,7 +104,45 @@ Optional:
 
 ---
 
-## 4) Validation rules (recommended)
+## 4) Data centre system types (`system_category` + `system_type`)
+
+**Source:** [secure-dc-spec-v2.md](../specs/secure-dc-spec-v2.md) §4.1. Same pattern as §1: each row is a `system_type` value stored on `systems.system_type`; `system_category` must be one of the Secure enums (use **Power**, **HVAC**, **Monitoring**, **Water** below). No DB CHECK constraint on `system_type` in the canonical schema — document + UI.
+
+**UI:** When `properties.asset_type === 'data_centre'`, the systems register / type dropdown should offer these types (under the matching category). For non–data-centre properties, existing office/retail types remain the default; DC types may still be stored if entered manually.
+
+| system_category | system_type | Notes |
+|-----------------|-------------|--------|
+| Power | HV_Intake | |
+| Power | UPS_System | |
+| Power | PDU_Unit | |
+| Power | Generator_Set | |
+| Power | StaticTransfer_Switch | |
+| Power | BusBars | |
+| Power | REC_Meter | Renewable energy certificate / REC metering |
+| HVAC | CRAC_Unit | |
+| HVAC | CRAH_Unit | |
+| HVAC | Chiller_Plant | |
+| HVAC | CoolingTower | |
+| HVAC | AdiabatiCooler | As per DC spec spelling |
+| HVAC | LiquidCooling_Rack | |
+| HVAC | ImmersionCooling | |
+| HVAC | HotAisleColdAisle | |
+| HVAC | FreeAirCooling | |
+| HVAC | CRAC_EC_Fan | |
+| Monitoring | DCIM_Platform | |
+| Monitoring | PUE_Meter | |
+| Monitoring | TemperatureHumidity_Sensor | |
+| Monitoring | Power_Chain_Monitor | |
+| Monitoring | WaterMeter_DC | |
+| Monitoring | RackPowerMeter | |
+| Water | MakeupWater_Meter | |
+| Water | TotalWater_Meter | |
+
+**Metrics mapping (spec §4.2):** PUE, WUE, IT load, cooling energy, etc. — see [secure-dc-spec-v2.md](../specs/secure-dc-spec-v2.md) §4.2.
+
+---
+
+## 5) Validation rules (recommended)
 
 1. When used, allocationWeight should sum to ~1 for a given scope (e.g., tenant demise electricity end-uses).
 2. If meteringStatus = not tenant-metered, dashboards must show Included in Service Charge / Allocated / Partial.

@@ -553,7 +553,7 @@ When building context for DC properties, Lovable must add these fields to the ex
 	•	Create ESG & Reporting Readiness tab
 	•	Wire dashboards to data_library_records and dc_metadata (not SitDeck yet)
 8.3  Phase 3 — SitDeck Integration (Week 3–5)
-	•	Build SitDeck connection UI (Account Settings → Integrations)
+	•	Build SitDeck connection UI (Data Library → Connectors)
 	•	Build Supabase Edge Function: sitdeck-sync (inventory + readings)
 	•	Implement upsert to dc_rack_assets on sitdeck_rack_id
 	•	Implement insert to dc_sensor_readings
@@ -683,7 +683,7 @@ last_synced_at
 timestamptz
 When active_widget_types was last refreshed from SitDeck
 10.6  Connection UI
-In Account Settings → Integrations, add a SitDeck Physical Risk card (separate from the SitDeck DCIM card in Section 6.6):
+In Data Library → Connectors, add a SitDeck connector row for Physical Risk / OSINT (separate from any SitDeck DCIM connector in Section 6.6):
 	•	Input: SitDeck embed token or API key (stored in Supabase secrets, never in the DB row)
 	•	Assign connection to property: dropdown of data_centre properties where no sitdeck_risk_config row yet exists
 	•	Status indicator: Connected (shows active widget types and last sync time) | Not connected | Auth error
@@ -697,7 +697,7 @@ The SitDeck physical risk map is not a decorative layer — the widget data feed
 10.8  Implementation Notes for Cursor
 	•	Confirm with SitDeck whether they provide an embed URL, an iframe token, or a JavaScript widget SDK. The integration approach (iframe vs JS SDK) determines implementation method.
 	•	Property lat/lng must be present in the properties table before the map widget can render. Add a lat/lng field to property creation if not already present.
-	•	The two SitDeck integrations (DCIM in Section 6, Physical Risk in Section 10) must be presented as separate connection cards in Account Settings. They use different credentials and serve different purposes.
+	•	The two SitDeck integrations (DCIM in Section 6, Physical Risk in Section 10) must be presented as separate connectors (e.g. both under Data Library → Connectors, or DCIM elsewhere per product). They use different credentials and serve different purposes.
 	•	Migration file: add-sitdeck-risk-config.sql (sitdeck_risk_config table + RLS). Add to Phase 3 implementation plan alongside the DCIM sync migrations.
 
 End of Specification

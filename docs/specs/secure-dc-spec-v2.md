@@ -251,7 +251,7 @@ SitDeck (https://sitdeck.com) is an OSINT dashboard platform — 180+ live data 
 - `/dashboards/data-centre/:propertyId/climate-hazard` — Climate & Natural Hazard Risk
 - `/dashboards/data-centre/:propertyId/cyber-infrastructure` — Cyber & Critical Infrastructure Risk
 
-**Integration:** Embed SitDeck widgets (iframe or JS SDK) in Secure dashboard panels; property lat/lng as map centre. SitDeck account token in Supabase secrets. Alert-to-finding pipeline: SitDeck custom alerts webhook POST to Secure Edge Function → writes agent_finding + audit_event. Property lat/lng required (add to properties if not present).
+**Integration:** Users connect SitDeck from **Data Library → Connectors** (not Account Settings → Integrations): Connect / Disconnect / optional Refresh; token in Supabase Vault or secrets via Edge Function; per-property widget enablement in `sitdeck_risk_config`. Embed SitDeck widgets (iframe or JS SDK) in Secure dashboard panels; property lat/lng as map centre. Alert-to-finding pipeline: SitDeck custom alerts webhook POST to Secure Edge Function → writes agent_finding + audit_event. Property lat/lng required (add to properties if not present).
 
 ---
 
@@ -272,7 +272,7 @@ SitDeck (https://sitdeck.com) is an OSINT dashboard platform — 180+ live data 
 
 **Phase 2 (Week 2–4):** DC dashboard routes and pages; wire to data_library_records and dc_metadata (no SitDeck yet).
 
-**Phase 3 (Week 3–5):** SitDeck OSINT only: connection UI (one card in Account Settings → Integrations); sitdeck_risk_config migration; embed widgets (geopolitical/climate/cyber + physical risk map); property lat/lng editable on Integrations & Evidence; optional webhook → agent_findings; live PUE tile from data_library_records.
+**Phase 3 (Week 3–5):** SitDeck OSINT only: connection UI (one SitDeck connector in **Data Library → Connectors**); sitdeck_risk_config migration; embed widgets (geopolitical/climate/cyber + physical risk map); property lat/lng editable on Integrations & Evidence; optional webhook → agent_findings; live PUE tile from data_library_records.
 
 **Phase 4 (Week 5–6):** Risk Diagnosis + physical_risk_flags (schema and UI); extend Data Readiness and Boundary context; PUE & Efficiency Advisor agent; wire agent from DC dashboard.
 
@@ -333,14 +333,14 @@ Use this order within each phase. Backend (migrations, schema) first, then UI.
 | Step | Task | Spec ref | Notes |
 |------|------|----------|--------|
 | 3.1 | Create migration `add-sitdeck-risk-config.sql`: table sitdeck_risk_config (account_id, property_id UNIQUE, active_widget_types text[], last_synced_at); RLS. | §10 | Token in Supabase secrets; no DCIM tables. |
-| 3.2 | Account Settings → Integrations: one "SitDeck" card — connect (store token in secrets), disconnect, optional refresh to update active_widget_types. | §6, §10 | Single integration for OSINT (widgets + risk). |
+| 3.2 | Data Library → Connectors: one "SitDeck" connector — connect (store token in secrets), disconnect, optional refresh to update active_widget_types. | §6, §10 | Single integration for OSINT (widgets + risk). |
 | 3.3 | Integrations & Evidence (or property settings): surface property latitude/longitude; allow edit so widgets can use coordinates. | Clarification Q3 | Backed by properties.lat/lng added in Phase 1. |
 | 3.4 | Property view (data_centre): embed SitDeck OSINT widgets — geopolitical, climate, cyber dashboards; anchor to property lat/lng. | §6 | iframe or JS SDK per SitDeck docs; show relation to asset location. |
 | 3.5 | Property view / Risk: embed physical risk map widget (flood, wildfire, etc.); feed into Risk Diagnosis when that exists (Phase 4). | §10 | sitdeck_risk_config drives which widgets are active. |
 | 3.6 | Optional: webhook receiver for SitDeck alerts → write to agent_findings (finding_type, source 'sitdeck'); extend agent_findings schema if needed (e.g. source, nullable agent_run_id). | §6, Clarification Q5 | For audit trail of threshold alerts. |
 | 3.7 | Live PUE tile on main property page: source PUE from data_library_records (not SitDeck DCIM). | §8 | Display only; data from manual/file input. |
 
-**Phase 3 done when:** User can connect SitDeck in Account Settings; DC property view shows OSINT and physical risk widgets; lat/lng editable; optional webhook → agent_findings.
+**Phase 3 done when:** User can connect SitDeck in **Data Library → Connectors**; DC property view shows OSINT and physical risk widgets; lat/lng editable; optional webhook → agent_findings.
 
 ---
 
@@ -370,9 +370,9 @@ Use this order within each phase. Backend (migrations, schema) first, then UI.
 
 **Separate from Section 6:** This is SitDeck as **physical risk intelligence** (widget-based map) — flood, wildfire, extreme weather, geopolitical, etc. around the asset. Rendered in Secure property view and Risk Diagnosis; feeds Risk Diagnosis as physical_risk_flags with source = 'sitdeck'.
 
-**Schema: sitdeck_risk_config** — account_id, property_id (UNIQUE), active_widget_types (text[]), last_synced_at. Token stored in Supabase secrets. Connection UI in Account Settings → Integrations (separate card from SitDeck DCIM). Refresh updates active_widget_types from SitDeck and writes to risk record. Migration: add-sitdeck-risk-config.sql.
+**Schema: sitdeck_risk_config** — account_id, property_id (UNIQUE), active_widget_types (text[]), last_synced_at. Token stored in Supabase secrets. Connection UI in **Data Library → Connectors** (SitDeck connector row; not Account Settings → Integrations). Refresh updates active_widget_types from SitDeck and writes to risk record. Migration: add-sitdeck-risk-config.sql.
 
-**Implementation notes:** Confirm SitDeck embed method (iframe vs JS SDK); property lat/lng required; two SitDeck integrations = two connection cards in Account Settings.
+**Implementation notes:** Confirm SitDeck embed method (iframe vs JS SDK); property lat/lng required; **one** SitDeck OSINT connector in **Data Library → Connectors** (not two cards, not Account Settings as primary).
 
 ---
 
@@ -411,7 +411,7 @@ Use this order within each phase. Backend (migrations, schema) first, then UI.
    Answer: yes, everything through Cursor. 
 
 8. **Section 6 vs Section 10 — two SitDeck integrations**  
-   Section 6 describes OSINT dashboards (geopolitical, climate, cyber) with embedded widgets and webhook → agent_finding. Section 10 describes physical risk map widget and sitdeck_risk_config feeding Risk Diagnosis. Are these the same SitDeck product with two UIs (dashboard widgets vs map widget), or two different products/contracts? This affects how we name and document the two “SitDeck” connection cards in Account Settings.
+   Section 6 describes OSINT dashboards (geopolitical, climate, cyber) with embedded widgets and webhook → agent_finding. Section 10 describes physical risk map widget and sitdeck_risk_config feeding Risk Diagnosis. Are these the same SitDeck product with two UIs (dashboard widgets vs map widget), or two different products/contracts? This affects how we name and document the SitDeck connector in **Data Library → Connectors** (single OSINT integration).
    Answer: These widgets come from integration with SitDeck, an intelligence dashboard. We need to integrate with them and, using the location of our data centre property type, show how they relate to our asset: https://sitdeck.com/?utm_source=superhuman&utm_medium=newsletter&utm_campaign=sitdeck-build-cia-level-dashboards-to-monitor-events&_bhlid=d98f6d80814bfca1b514d5180178eed4ad410dab
 
 ---
@@ -419,7 +419,7 @@ Use this order within each phase. Backend (migrations, schema) first, then UI.
 ### Clarification summary (post-answers)
 
 - **All 8 questions are answered.** No further clarification is required to proceed.
-- **SitDeck scope:** Only SitDeck OSINT (intelligence dashboard / risk widgets) is in scope. SitDeck DCIM and any sync of rack/sensor telemetry are **out of scope**. There is **one** SitDeck integration in Account Settings (OSINT), not two.
+- **SitDeck scope:** Only SitDeck OSINT (intelligence dashboard / risk widgets) is in scope. SitDeck DCIM and any sync of rack/sensor telemetry are **out of scope**. There is **one** SitDeck integration in **Data Library → Connectors** (OSINT), not two.
 - **Schema implications:**  
   - **Drop from spec:** dc_rack_assets, dc_sensor_readings, dc_sync_log as SitDeck-sync tables.  
   - **Keep:** dc_metadata; data_library_records for PUE/energy (manual or file-based); Risk Diagnosis and physical_risk_flags to be defined and added as part of this work.  

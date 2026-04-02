@@ -37,7 +37,7 @@ The spec defines **nine** Data Centre dashboard views: six operational (§5) and
 | `/dashboards/data-centre/:propertyId/climate-hazard` | **Risk Intelligence:** Climate & Natural Hazard Risk (SitDeck embed) |
 | `/dashboards/data-centre/:propertyId/cyber-infrastructure` | **Risk Intelligence:** Cyber & Critical Infrastructure Risk (SitDeck embed) |
 
-The last three are **SitDeck OSINT** dashboards ([SitDeck](https://sitdeck.com)): embed SitDeck widgets (iframe or JS SDK) in Secure panels; use property `latitude` / `longitude` as map centre. If SitDeck connection is not yet configured, show a placeholder panel with a short message (e.g. “Connect SitDeck in Account Settings → Integrations to see risk intelligence”) and still provide the route and nav so the structure is complete.
+The last three are **SitDeck OSINT** dashboards ([SitDeck](https://sitdeck.com)): embed SitDeck widgets (iframe or JS SDK) in Secure panels; use property `latitude` / `longitude` as map centre. If SitDeck connection is not yet configured, show a placeholder panel with a short message (e.g. “Connect SitDeck in Data Library → Connectors to see risk intelligence”) and still provide the route and nav so the structure is complete.
 
 **Content per dashboard (from spec §5.2–5.7):**
 
@@ -53,7 +53,7 @@ The last three are **SitDeck OSINT** dashboards ([SitDeck](https://sitdeck.com))
 
 6. **ESG & Reporting Readiness** (`/dashboards/data-centre/:propertyId/esg`): GRESB DC module readiness, EED Article 12 fields, renewable breakdown, Scope 2 (market/location), data quality from CoverageEngine.
 
-7. **Geopolitical & Conflict Risk** (`/dashboards/data-centre/:propertyId/geopolitical`): SitDeck OSINT dashboard — embed widget (iframe or JS SDK); centre on property lat/lng. If SitDeck not connected: placeholder + “Connect SitDeck in Integrations”.
+7. **Geopolitical & Conflict Risk** (`/dashboards/data-centre/:propertyId/geopolitical`): SitDeck OSINT dashboard — embed widget (iframe or JS SDK); centre on property lat/lng. If SitDeck not connected: placeholder + “Connect SitDeck in Data Library → Connectors”.
 
 8. **Climate & Natural Hazard Risk** (`/dashboards/data-centre/:propertyId/climate-hazard`): SitDeck OSINT dashboard — same as above.
 
@@ -75,7 +75,7 @@ Data Centre dashboards — fix two issues. Do not change Office or other asset-t
 **2) Full dashboard set per spec**
 - The backend spec (secure-dc-spec-v2.md §5 and §6) requires nine Data Centre dashboard views. Implement any that are missing and align content with the spec.
 - Operational (§5): Landing /dashboards/data-centre (portfolio overview: PUE avg/range, IT load, energy YTD, renewable %, etc.; property table). Single property /dashboards/data-centre/:propertyId (six KPI tiles + links to sub-dashboards). Then: /pue (time series, waterfall, Tier benchmark), /capacity (capacity gauge, power chain, hall-level, redundancy), /cooling (cooling breakdown, WUE trend, free cooling, water), /esg (GRESB, EED Article 12, renewable, Scope 2, data quality).
-- Risk Intelligence (§6 — SitDeck): /dashboards/data-centre/:propertyId/geopolitical (Geopolitical & Conflict Risk), /climate-hazard (Climate & Natural Hazard Risk), /cyber-infrastructure (Cyber & Critical Infrastructure Risk). Embed SitDeck widgets (iframe or JS SDK per https://sitdeck.com); centre on property latitude/longitude. Group these under a "Risk Intelligence" tab or section. If SitDeck is not connected yet, show a placeholder panel: "Connect SitDeck in Account Settings → Integrations to see risk intelligence" and still provide the route and nav.
+- Risk Intelligence (§6 — SitDeck): /dashboards/data-centre/:propertyId/geopolitical (Geopolitical & Conflict Risk), /climate-hazard (Climate & Natural Hazard Risk), /cyber-infrastructure (Cyber & Critical Infrastructure Risk). Embed SitDeck widgets (iframe or JS SDK per https://sitdeck.com); centre on property latitude/longitude. Group these under a "Risk Intelligence" tab or section. If SitDeck is not connected yet, show a placeholder panel: "Connect SitDeck in Data Library → Connectors to see risk intelligence" and still provide the route and nav.
 - Data from dc_metadata, data_library_records, properties for §5. Use placeholder + // MISSING_SCHEMA where a field is not in schema. Match existing dashboard component structure and design; read-only.
 ```
 

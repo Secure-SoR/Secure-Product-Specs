@@ -40,6 +40,7 @@ Supabase Auth creates the user; the `handle_new_user` trigger creates a row in `
 | account_memberships    | User ↔ Account, role                         | Yes (via account_id) |
 | properties             | Property (building)                          | Yes            |
 | dc_metadata            | Data centre metadata (one row per DC property) | Yes          |
+| sitdeck_risk_config    | SitDeck risk widgets enabled per property     | Yes            |
 | spaces                 | Space within a property                      | Via property   |
 | systems                | Building system (HVAC, Power, etc.)          | Yes            |
 | meters                 | Meter (first-class)                          | Yes            |
@@ -50,6 +51,19 @@ Supabase Auth creates the user; the `handle_new_user` trigger creates a row in `
 | agent_runs             | One agent invocation                         | Yes            |
 | agent_findings         | Findings from one run                        | Via run        |
 | audit_events            | Append-only audit log                         | Yes            |
+| at_floors               | Asset Tracking: floor plans / levels per property | Yes        |
+| at_zones                | Asset Tracking: zone polygons on a floor      | Yes            |
+| at_asset_types          | Asset Tracking: account / property asset taxonomy | Yes        |
+| at_assets               | Asset Tracking: trackable instances           | Yes            |
+| at_asset_tags           | Asset Tracking: Wirepas tags (not `systems`) | Yes           |
+| at_gateways             | Asset Tracking: Wirepas gateways              | Yes            |
+| at_position_events      | Asset Tracking: position time series (append-only) | Yes     |
+| at_alerts               | Asset Tracking: alerts (status transitions)   | Yes          |
+| at_device_state         | Asset Tracking: DALI live state per `systems` row | Yes      |
+| at_dali_commands        | Asset Tracking: DALI command queue            | Yes            |
+| at_facility_settings    | Asset Tracking: thresholds per property       | Yes            |
+
+**Spec:** [secure-asset-tracking-spec-v2.0.md](../specs/secure-asset-tracking-spec-v2.0.md). **Migrations:** [migrations/](migrations/) files prefixed `add-at-`, `create-at-`, `extend-systems-type-dalilight`, `seed-at-asset-types-mining`.
 
 ---
 
@@ -134,6 +148,7 @@ Property (building/site). Account-scoped.
 | total_area | numeric   | YES      | |
 | latitude  | numeric   | YES      | Property latitude for maps and SitDeck widgets (migration: add-properties-lat-lng.sql) |
 | longitude | numeric   | YES      | Property longitude for maps and SitDeck widgets (migration: add-properties-lat-lng.sql) |
+| at_enabled | boolean  | NO       | Default false; when true, Asset Tracking is active for this facility ([add-at-enabled-to-properties.sql](migrations/add-at-enabled-to-properties.sql)) |
 | created_at | timestamptz | NO    | |
 | updated_at | timestamptz | NO    | |
 
@@ -165,6 +180,24 @@ Data centre–specific metadata. One row per property with `asset_type = 'data_c
 | updated_at | timestamptz | NO | |
 
 **RLS:** account-scoped (SELECT, INSERT, UPDATE, DELETE for members). **Migration:** [add-dc-metadata.sql](./migrations/add-dc-metadata.sql).
+
+---
+
+### 3.4b sitdeck_risk_config
+
+Per-property configuration for **SitDeck** risk intelligence widgets (e.g. geopolitical, climate, cyber). One row per property (`UNIQUE(property_id)`). The app populates this from **Data Library → Connectors** (SitDeck connector: Connect / Refresh), not from Account Settings → Integrations. Spec context: [docs/specs/secure-dc-spec-v2.md](../specs/secure-dc-spec-v2.md) §6 (Risk Intelligence / SitDeck).
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | uuid | NO | PK |
+| account_id | uuid | NO | FK → accounts.id |
+| property_id | uuid | NO | FK → properties.id (UNIQUE) |
+| active_widget_types | text[] | YES | Enabled widget type identifiers (app-defined; e.g. geopolitical, climate_hazard, cyber) |
+| last_synced_at | timestamptz | YES | Last successful sync with SitDeck (if tracked server-side) |
+| created_at | timestamptz | NO | |
+| updated_at | timestamptz | NO | |
+
+**RLS:** account-scoped (SELECT, INSERT, UPDATE, DELETE for members). **Migration:** [add-sitdeck-risk-config.sql](./migrations/add-sitdeck-risk-config.sql).
 
 ---
 
@@ -376,16 +409,55 @@ Append-only audit log. Before/after state for traceability.
 
 ---
 
+### 3.15 Asset Tracking tables (v2.0)
+
+Canonical column list and behaviour: [secure-asset-tracking-spec-v2.0.md](../specs/secure-asset-tracking-spec-v2.0.md) §6. **Naming note:** `at_zones.space_id` references `spaces.id` (optional). The v2.0 prose table used the label `spaces_id`; the implemented FK column is `space_id`.
+
+**at_floors** — `id`, `account_id`, `property_id`, `name`, `level_index`, `floor_plan_image_url`, `floor_plan_width_px`, `floor_plan_height_px`, `coord_system` (`pixel` \| `local_metres` \| `gps`), `gps_calibration`, `created_at`, `updated_at`.
+
+**at_zones** — `id`, `account_id`, `floor_id` → `at_floors`, `property_id`, `name`, `zone_type` (`public` \| `restricted` \| `staff_entry`), `polygon` (jsonb), `space_id` → `spaces` (optional), `description`, `created_at`, `updated_at`.
+
+**at_asset_types** — `id`, `account_id`, `property_id` (null = account master), `name`, `category`, `icon_key`, `description`, `created_at`. Unique: `(account_id, name)` where `property_id` is null; `(account_id, property_id, name)` where `property_id` is set (partial unique indexes).
+
+**at_assets** — `id`, `account_id`, `property_id`, `name`, `asset_type_id`, `user_id`, `default_zone_id`, `tag_id` → `at_asset_tags`, `status`, `serial_number`, `created_at`, `updated_at`.
+
+**at_asset_tags** — `id`, `account_id`, `property_id`, `wirepas_node_id`, `mac_address`, `tag_model`, `has_panic_button`, `panic_button_action`, `battery_level_pct`, `firmware_version`, `status`, `assigned_asset_id` → `at_assets`, `last_seen_at`, `created_at`, `updated_at`. Unique `(property_id, wirepas_node_id)`; partial unique on `assigned_asset_id` where not null.
+
+**at_gateways** — `id`, `account_id`, `property_id`, `floor_id`, `name`, `wirepas_gateway_id`, `mac_address`, `firmware_version`, `ip_address`, `online`, `connected_node_count`, `last_heartbeat_at`, `created_at`, `updated_at`. Unique `(property_id, wirepas_gateway_id)`.
+
+**at_position_events** — `id`, `account_id`, `property_id`, `asset_id`, `tag_id`, `floor_id`, `zone_id`, `x_pos`, `y_pos`, `accuracy_m`, `source`, `recorded_at`, `created_at`. Append-only; RLS: SELECT + INSERT for members (no client UPDATE/DELETE).
+
+**at_alerts** — `id`, `account_id`, `property_id`, `asset_id`, `alert_type`, `zone_id`, `floor_id`, `message`, `idle_minutes`, `status`, `acknowledged_by`, `acknowledged_at`, `triggered_at`, `created_at`. Trigger `at_alerts_audit_trigger` appends `audit_events` on insert and on status/ack fields update.
+
+**at_device_state** — `id`, `account_id`, `system_id` → `systems` (unique), `online`, `light_on`, `dim_level_pct`, `als_value`, `daylight_harvesting_active`, `daylight_harvesting_pct`, `behaviour_mode_index`, `power_watts`, `last_updated_at`.
+
+**at_dali_commands** — `id`, `account_id`, `system_id`, `command_type`, `payload`, `status`, `created_by`, `created_at`, `sent_at`, `acknowledged_at`.
+
+**at_facility_settings** — `id`, `account_id`, `property_id` (unique), `position_update_interval_sec` (5–60), `prolonged_idle_threshold_min`, `panic_button_default_action`, `out_of_zone_enabled`, `restricted_entry_enabled`, `dali_motion_timeout_sec`, `dali_dh_setpoint_als`, `created_at`, `updated_at`.
+
+---
+
 ## 4. Relationships (ER summary)
 
 - **accounts** ← account_memberships (user_id → auth.users)
 - **accounts** ← properties ← spaces
 - **accounts** ← properties ← dc_metadata (one row per data_centre property)
+- **accounts** ← properties ← sitdeck_risk_config (one row per property; SitDeck widgets)
 - **accounts** ← properties ← systems ← end_use_nodes
 - **accounts** ← properties ← meters (optional system_id → systems)
 - **accounts** ← data_library_records (optional property_id)
 - **data_library_records** ← evidence_attachments → documents
 - **accounts** ← agent_runs ← agent_findings
 - **accounts** ← audit_events
+- **accounts** ← properties ← at_floors ← at_zones; **spaces** optional from `at_zones.space_id`
+- **accounts** ← at_asset_types; **properties** optional for property-scoped types
+- **accounts** ← at_assets → at_asset_types, at_zones, at_asset_tags (`tag_id`), auth.users (`user_id`)
+- **accounts** ← at_asset_tags → at_assets (`assigned_asset_id`)
+- **accounts** ← at_gateways → at_floors (optional)
+- **accounts** ← at_position_events → at_assets, at_asset_tags, at_floors, at_zones
+- **accounts** ← at_alerts → at_assets, at_zones, at_floors
+- **accounts** ← at_device_state → **systems** (DALI fixture row)
+- **accounts** ← at_dali_commands → **systems**
+- **accounts** ← at_facility_settings → **properties** (one row per property)
 
 All account-scoped tables are protected by RLS so that `auth.uid()` is required and rows are filtered by membership in the row’s `account_id`.

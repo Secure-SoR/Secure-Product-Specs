@@ -8,31 +8,33 @@ This guide explains **what each step means** and **how to do it** in plain langu
 
 ## Step 3.1 — Create sitdeck_risk_config table (migration)
 
-**What it means:** We need a table to store, per property, which SitDeck risk widgets are active and when we last synced. The integration token is stored in Supabase secrets, not in this table.
+**What it means:** We need a table to store, per property, which SitDeck risk widgets are active and when we last synced. The integration token is stored in Supabase secrets / Vault / Edge Function, not in this table.
 
 **How to do it:**
 
-- **Where:** Backend repo, migrations folder.
-- **Create:** `add-sitdeck-risk-config.sql`. Table: `sitdeck_risk_config` with columns: id, account_id, property_id (UNIQUE), active_widget_types (text array), last_synced_at (timestamptz). Add RLS so only users in the same account can read/update. Add index on property_id.
-- **If you use Cursor:**  
-  *"Create migration add-sitdeck-risk-config.sql for table sitdeck_risk_config (account_id, property_id UNIQUE, active_widget_types text[], last_synced_at), with RLS by account_id."*
+- **Where:** Backend repo — migration file [add-sitdeck-risk-config.sql](../database/migrations/add-sitdeck-risk-config.sql). Logical schema: [schema.md](../database/schema.md) §3.4b.
+- **Run:** Supabase Dashboard → SQL Editor → paste and run that file (idempotent policies). Greenfield installs that use the full [supabase-schema.sql](../database/supabase-schema.sql) already include this table.
+- **If you use Cursor (already done in repo):** Migration defines `sitdeck_risk_config` with `account_id`, `property_id` **UNIQUE**, `active_widget_types text[]`, `last_synced_at`, timestamps, indexes, RLS by `account_id`.
 
 **Done when:** Migration runs and the table exists.
 
 ---
 
-## Step 3.2 — SitDeck connection in Account Settings → Integrations
+## Step 3.2 — SitDeck connector in Data Library → Connectors
 
-**What it means:** In Account Settings (or Integrations), add **one** "SitDeck" card. The user can connect (enter token/credentials — stored in Supabase secrets), disconnect, and optionally refresh to update which widget types are active. This is the single SitDeck (OSINT) integration, not a second DCIM integration.
+**What it means:** SitDeck is configured from **Data Library → Connectors** (alongside other data connectors), not from Account Settings → Integrations. Add **one** SitDeck connector row/card there. The user can connect (token/credentials — stored in Supabase secrets / Vault / Edge Function), disconnect, and optionally refresh to update which widget types are active. This is the single SitDeck (OSINT) connector for Phase 3, not a second DCIM integration.
 
 **How to do it:**
 
-- **Where:** Lovable app — Account Settings → Integrations (or equivalent).
-- **UI:** One card labelled e.g. "SitDeck" with Connect / Disconnect. On Connect, prompt for token (or OAuth if SitDeck provides it); save to Supabase secrets or a secure server-side store. On Refresh, call SitDeck (per their API) to get active widget types and update `sitdeck_risk_config` for the relevant property/properties.
+- **Where:** Lovable app — **Data Library → Connectors** (or equivalent nav: Data Library, then a Connectors sub-section/tab).
+- **UI:** One SitDeck connector in the connectors list with Connect / Disconnect (and optional Refresh). On Connect, prompt for token (or OAuth if SitDeck provides it); save via a **server-side** path (Edge Function + Vault recommended — never store the token in `sitdeck_risk_config` or client storage). On Refresh, call SitDeck (per their API) to get active widget types and upsert `sitdeck_risk_config` for the relevant property/properties (`active_widget_types`, `last_synced_at`).
+- **Lovable (paste-ready):** [LOVABLE-PROMPT-SITDECK-INTEGRATIONS-ACCOUNT-SETTINGS.md](./LOVABLE-PROMPT-SITDECK-INTEGRATIONS-ACCOUNT-SETTINGS.md) *(filename is legacy; content describes Data Library → Connectors)*. Canonical copy also in [docs/lovable-prompts/](../lovable-prompts/LOVABLE-PROMPT-SITDECK-INTEGRATIONS-ACCOUNT-SETTINGS.md); **keep both in sync** if you edit.
 - **If you use Cursor:**  
-  *"In Account Settings → Integrations, add one SitDeck card: Connect (store token in secrets), Disconnect, optional Refresh to update active widget types. Use sitdeck_risk_config table."*
+  *"In Data Library → Connectors, add SitDeck: Connect (store token in secrets), Disconnect, optional Refresh to update active widget types. Use sitdeck_risk_config table. Do not use Account Settings → Integrations as the primary place for SitDeck."*
 
-**Done when:** User can connect and disconnect SitDeck; token is stored securely; refresh updates config.
+**Done when:** User can connect and disconnect SitDeck from Data Library → Connectors; token is stored securely; refresh updates config.
+
+**Where the SitDeck token comes from:** Secure does not create it. Obtain whatever credential SitDeck’s product expects (API key, embed token, client id/secret, or OAuth) from **your SitDeck account** and their official documentation or support — for example [sitdeck.com](https://sitdeck.com) and any developer or embed guides they provide. Paste or complete OAuth only through the Connectors Connect flow once implemented; never commit tokens to the repo or store them in `sitdeck_risk_config`.
 
 ---
 
@@ -44,6 +46,8 @@ This guide explains **what each step means** and **how to do it** in plain langu
 
 - **Where:** Lovable app — the page you use for "Integrations & Evidence" or the property settings/edit screen.
 - **UI:** Two fields: Latitude, Longitude (numeric). Load/save from `properties.latitude` and `properties.longitude`. Optional for non-DC properties; especially important for data centre properties that use SitDeck.
+- **DB:** Columns are `numeric` nullable — see [add-properties-lat-lng.sql](../database/migrations/add-properties-lat-lng.sql) if your Supabase project predates them.
+- **Lovable (paste-ready):** [LOVABLE-PROMPT-PROPERTY-LAT-LNG.md](./LOVABLE-PROMPT-PROPERTY-LAT-LNG.md) · [lovable-prompts copy](../lovable-prompts/LOVABLE-PROMPT-PROPERTY-LAT-LNG.md)
 - **If you use Cursor:**  
   *"On the Integrations & Evidence page (or property settings), add Latitude and Longitude fields, saved to properties.latitude and properties.longitude."*
 
@@ -114,7 +118,7 @@ This guide explains **what each step means** and **how to do it** in plain langu
 
 You’re done with Phase 3 when:
 
-- SitDeck can be connected in Account Settings; token stored; config in sitdeck_risk_config.
+- SitDeck can be connected from **Data Library → Connectors**; token stored; config in sitdeck_risk_config.
 - Property lat/lng can be edited (Integrations & Evidence or settings).
 - DC property view shows SitDeck OSINT widgets and physical risk map.
 - Optional: webhook writes SitDeck alerts to agent_findings.

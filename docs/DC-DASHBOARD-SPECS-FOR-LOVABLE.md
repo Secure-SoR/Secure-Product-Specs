@@ -131,7 +131,7 @@ Use this section as the definitive list of what must appear on each dashboard. E
 
 ### Dashboards 7–9 — Risk Intelligence (SitDeck)
 
-**KPIs/tiles:** Each dashboard embeds SitDeck widgets (see Widgets tables in full spec below). If SitDeck not connected, show one placeholder tile: “Connect SitDeck in Account Settings → Integrations to see risk intelligence.”
+**KPIs/tiles:** Each dashboard embeds SitDeck widgets (see Widgets tables in full spec below). If SitDeck not connected, show one placeholder tile: “Connect SitDeck in Data Library → Connectors to see risk intelligence.”
 
 **Widgets to include (when SitDeck connected):**
 - **Geopolitical:** Active Conflicts Map, Military & Defense Activity Feed, Geopolitical Risk Index, SitDeck AI Situation Report
