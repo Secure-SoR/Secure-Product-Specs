@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS public.properties (
   total_area numeric,
   latitude numeric,
   longitude numeric,
+  at_enabled boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -85,6 +86,60 @@ CREATE TABLE IF NOT EXISTS public.dc_metadata (
 );
 CREATE INDEX IF NOT EXISTS idx_dc_metadata_account_id ON public.dc_metadata(account_id);
 CREATE INDEX IF NOT EXISTS idx_dc_metadata_property_id ON public.dc_metadata(property_id);
+
+CREATE TABLE IF NOT EXISTS public.sitdeck_risk_config (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  active_widget_types text[],
+  last_synced_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(property_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sitdeck_risk_config_account_id ON public.sitdeck_risk_config(account_id);
+CREATE INDEX IF NOT EXISTS idx_sitdeck_risk_config_property_id ON public.sitdeck_risk_config(property_id);
+
+CREATE TABLE IF NOT EXISTS public.risk_diagnosis (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  summary text,
+  overall_risk_level text CHECK (
+    overall_risk_level IS NULL
+    OR overall_risk_level IN ('unknown', 'low', 'moderate', 'high', 'critical')
+  ),
+  diagnosis_json jsonb,
+  assessed_at timestamptz,
+  sitdeck_last_synced_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (property_id)
+);
+CREATE INDEX IF NOT EXISTS idx_risk_diagnosis_account_id ON public.risk_diagnosis(account_id);
+CREATE INDEX IF NOT EXISTS idx_risk_diagnosis_property_id ON public.risk_diagnosis(property_id);
+
+CREATE TABLE IF NOT EXISTS public.physical_risk_flags (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  risk_diagnosis_id uuid NOT NULL REFERENCES public.risk_diagnosis(id) ON DELETE CASCADE,
+  flag_type text NOT NULL,
+  source text NOT NULL CHECK (source IN ('sitdeck', 'manual', 'agent')),
+  severity text CHECK (
+    severity IS NULL
+    OR severity IN ('unknown', 'low', 'moderate', 'high', 'critical')
+  ),
+  title text,
+  detail text,
+  payload jsonb,
+  external_ref text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_physical_risk_flags_diagnosis_id ON public.physical_risk_flags(risk_diagnosis_id);
+CREATE INDEX IF NOT EXISTS idx_physical_risk_flags_source ON public.physical_risk_flags(risk_diagnosis_id, source);
+
+COMMENT ON TABLE public.risk_diagnosis IS 'Per-property risk assessment snapshot; DC Risk Diagnosis UI';
+COMMENT ON TABLE public.physical_risk_flags IS 'Physical risk flags; source = sitdeck | manual | agent';
 
 CREATE TABLE IF NOT EXISTS public.spaces (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -223,12 +278,29 @@ CREATE INDEX IF NOT EXISTS idx_agent_runs_account_id ON public.agent_runs(accoun
 
 CREATE TABLE IF NOT EXISTS public.agent_findings (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_run_id uuid NOT NULL REFERENCES public.agent_runs(id) ON DELETE CASCADE,
+  agent_run_id uuid REFERENCES public.agent_runs(id) ON DELETE CASCADE,
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid REFERENCES public.properties(id) ON DELETE SET NULL,
+  source text,
   finding_type text,
   payload jsonb NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT agent_findings_source_run_check CHECK (
+    (agent_run_id IS NOT NULL AND (source IS NULL OR source <> 'sitdeck'))
+    OR
+    (agent_run_id IS NULL AND source = 'sitdeck' AND account_id IS NOT NULL)
+  )
 );
 CREATE INDEX IF NOT EXISTS idx_agent_findings_agent_run_id ON public.agent_findings(agent_run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_findings_account_id ON public.agent_findings(account_id);
+CREATE INDEX IF NOT EXISTS idx_agent_findings_property_id ON public.agent_findings(property_id)
+  WHERE property_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_agent_findings_account_sitdeck ON public.agent_findings(account_id, created_at DESC)
+  WHERE source = 'sitdeck';
+
+COMMENT ON COLUMN public.agent_findings.account_id IS 'Tenant scope; set from agent_runs or for webhook-sourced findings';
+COMMENT ON COLUMN public.agent_findings.source IS 'sitdeck for SitDeck webhook alerts; NULL when tied to an agent run';
+COMMENT ON COLUMN public.agent_findings.property_id IS 'Optional property scope (e.g. SitDeck alert for a specific property)';
 
 CREATE TABLE IF NOT EXISTS public.audit_events (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -245,6 +317,217 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_account_id ON public.audit_events(ac
 CREATE INDEX IF NOT EXISTS idx_audit_events_entity ON public.audit_events(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON public.audit_events(created_at);
 
+-- Asset Tracking (v2.0) — spec: docs/specs/secure-asset-tracking-spec-v2.0.md §6
+CREATE TABLE IF NOT EXISTS public.at_floors (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  level_index integer,
+  floor_plan_image_url text,
+  floor_plan_width_px integer,
+  floor_plan_height_px integer,
+  coord_system text NOT NULL CHECK (coord_system IN ('pixel', 'local_metres', 'gps')),
+  gps_calibration jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_at_floors_account_id ON public.at_floors(account_id);
+CREATE INDEX IF NOT EXISTS idx_at_floors_property_id ON public.at_floors(property_id);
+
+CREATE TABLE IF NOT EXISTS public.at_zones (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  floor_id uuid NOT NULL REFERENCES public.at_floors(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  zone_type text NOT NULL CHECK (zone_type IN ('public', 'restricted', 'staff_entry')),
+  polygon jsonb NOT NULL,
+  space_id uuid REFERENCES public.spaces(id) ON DELETE SET NULL,
+  description text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_at_zones_floor_id ON public.at_zones(floor_id);
+CREATE INDEX IF NOT EXISTS idx_at_zones_property_zone_type ON public.at_zones(property_id, zone_type);
+CREATE INDEX IF NOT EXISTS idx_at_zones_account_id ON public.at_zones(account_id);
+
+CREATE TABLE IF NOT EXISTS public.at_asset_types (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid REFERENCES public.properties(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  category text NOT NULL CHECK (category IN ('workers', 'drilling_equipments', 'loading_equipments', 'medical_kit')),
+  icon_key text NOT NULL,
+  description text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_at_asset_types_account_id ON public.at_asset_types(account_id);
+CREATE INDEX IF NOT EXISTS idx_at_asset_types_property_id ON public.at_asset_types(property_id);
+CREATE UNIQUE INDEX IF NOT EXISTS at_asset_types_account_name_account_level
+  ON public.at_asset_types (account_id, name) WHERE property_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS at_asset_types_account_property_name
+  ON public.at_asset_types (account_id, property_id, name) WHERE property_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public.at_assets (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  asset_type_id uuid REFERENCES public.at_asset_types(id) ON DELETE SET NULL,
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  default_zone_id uuid REFERENCES public.at_zones(id) ON DELETE SET NULL,
+  tag_id uuid,
+  status text NOT NULL CHECK (status IN ('active', 'inactive', 'in_maintenance')),
+  serial_number text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_at_assets_account_id ON public.at_assets(account_id);
+CREATE INDEX IF NOT EXISTS idx_at_assets_property_id ON public.at_assets(property_id);
+CREATE INDEX IF NOT EXISTS idx_at_assets_asset_type_id ON public.at_assets(asset_type_id);
+CREATE INDEX IF NOT EXISTS idx_at_assets_tag_id ON public.at_assets(tag_id);
+
+CREATE TABLE IF NOT EXISTS public.at_asset_tags (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  wirepas_node_id text NOT NULL,
+  mac_address text,
+  tag_model text,
+  has_panic_button boolean NOT NULL DEFAULT false,
+  panic_button_action text CHECK (panic_button_action IS NULL OR panic_button_action IN ('panic', 'movement_detection', 'custom_scene')),
+  battery_level_pct numeric,
+  firmware_version text,
+  status text NOT NULL CHECK (status IN ('active', 'inactive', 'unassigned')),
+  assigned_asset_id uuid REFERENCES public.at_assets(id) ON DELETE SET NULL,
+  last_seen_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (property_id, wirepas_node_id)
+);
+CREATE INDEX IF NOT EXISTS idx_at_asset_tags_account_id ON public.at_asset_tags(account_id);
+CREATE INDEX IF NOT EXISTS idx_at_asset_tags_property_id ON public.at_asset_tags(property_id);
+CREATE INDEX IF NOT EXISTS idx_at_asset_tags_assigned_asset_id ON public.at_asset_tags(assigned_asset_id);
+CREATE UNIQUE INDEX IF NOT EXISTS at_asset_tags_one_row_per_assigned_asset
+  ON public.at_asset_tags (assigned_asset_id) WHERE assigned_asset_id IS NOT NULL;
+
+ALTER TABLE public.at_assets DROP CONSTRAINT IF EXISTS at_assets_tag_id_fkey;
+ALTER TABLE public.at_assets
+  ADD CONSTRAINT at_assets_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.at_asset_tags(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS public.at_gateways (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  floor_id uuid REFERENCES public.at_floors(id) ON DELETE SET NULL,
+  name text NOT NULL,
+  wirepas_gateway_id text NOT NULL,
+  mac_address text,
+  firmware_version text,
+  ip_address text,
+  online boolean NOT NULL DEFAULT false,
+  connected_node_count integer,
+  last_heartbeat_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (property_id, wirepas_gateway_id)
+);
+CREATE INDEX IF NOT EXISTS idx_at_gateways_account_id ON public.at_gateways(account_id);
+CREATE INDEX IF NOT EXISTS idx_at_gateways_property_id ON public.at_gateways(property_id);
+CREATE INDEX IF NOT EXISTS idx_at_gateways_floor_id ON public.at_gateways(floor_id);
+
+CREATE TABLE IF NOT EXISTS public.at_position_events (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  asset_id uuid NOT NULL REFERENCES public.at_assets(id) ON DELETE CASCADE,
+  tag_id uuid REFERENCES public.at_asset_tags(id) ON DELETE SET NULL,
+  floor_id uuid REFERENCES public.at_floors(id) ON DELETE SET NULL,
+  zone_id uuid REFERENCES public.at_zones(id) ON DELETE SET NULL,
+  x_pos numeric,
+  y_pos numeric,
+  accuracy_m numeric,
+  source text NOT NULL CHECK (source IN ('wirepas', 'manual', 'simulated')),
+  recorded_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_at_position_events_asset_recorded_desc ON public.at_position_events (asset_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_at_position_events_property_floor_recorded_desc ON public.at_position_events (property_id, floor_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_at_position_events_asset_recorded_asc ON public.at_position_events (asset_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_at_position_events_property_zone_recorded ON public.at_position_events (property_id, zone_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_at_position_events_account_id ON public.at_position_events(account_id);
+
+CREATE TABLE IF NOT EXISTS public.at_alerts (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  asset_id uuid NOT NULL REFERENCES public.at_assets(id) ON DELETE CASCADE,
+  alert_type text NOT NULL CHECK (alert_type IN ('restricted_entry', 'out_of_zone', 'prolonged_idle', 'panic', 'custom')),
+  zone_id uuid REFERENCES public.at_zones(id) ON DELETE SET NULL,
+  floor_id uuid REFERENCES public.at_floors(id) ON DELETE SET NULL,
+  message text NOT NULL,
+  idle_minutes integer,
+  status text NOT NULL CHECK (status IN ('unread', 'acknowledged', 'dismissed')),
+  acknowledged_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  acknowledged_at timestamptz,
+  triggered_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_at_alerts_property_status ON public.at_alerts(property_id, status);
+CREATE INDEX IF NOT EXISTS idx_at_alerts_asset_triggered_desc ON public.at_alerts(asset_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_at_alerts_account_type_status ON public.at_alerts(account_id, alert_type, status);
+CREATE INDEX IF NOT EXISTS idx_at_alerts_account_id ON public.at_alerts(account_id);
+
+CREATE TABLE IF NOT EXISTS public.at_device_state (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  system_id uuid NOT NULL REFERENCES public.systems(id) ON DELETE CASCADE,
+  online boolean NOT NULL DEFAULT false,
+  light_on boolean,
+  dim_level_pct numeric,
+  als_value numeric,
+  daylight_harvesting_active boolean,
+  daylight_harvesting_pct numeric,
+  behaviour_mode_index integer,
+  power_watts numeric,
+  last_updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (system_id)
+);
+CREATE INDEX IF NOT EXISTS idx_at_device_state_account_id ON public.at_device_state(account_id);
+
+CREATE TABLE IF NOT EXISTS public.at_dali_commands (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  system_id uuid NOT NULL REFERENCES public.systems(id) ON DELETE CASCADE,
+  command_type text NOT NULL CHECK (command_type IN ('set_on_off', 'set_dim_level', 'set_scene', 'set_dh_enabled')),
+  payload jsonb NOT NULL,
+  status text NOT NULL CHECK (status IN ('queued', 'sent', 'acknowledged', 'failed')),
+  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  sent_at timestamptz,
+  acknowledged_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_at_dali_commands_account_id ON public.at_dali_commands(account_id);
+CREATE INDEX IF NOT EXISTS idx_at_dali_commands_system_status ON public.at_dali_commands(system_id, status);
+
+CREATE TABLE IF NOT EXISTS public.at_facility_settings (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  position_update_interval_sec integer NOT NULL DEFAULT 15 CHECK (position_update_interval_sec >= 5 AND position_update_interval_sec <= 60),
+  prolonged_idle_threshold_min integer NOT NULL DEFAULT 60,
+  panic_button_default_action text NOT NULL CHECK (panic_button_default_action IN ('panic', 'movement_detection', 'custom_scene')),
+  out_of_zone_enabled boolean NOT NULL DEFAULT true,
+  restricted_entry_enabled boolean NOT NULL DEFAULT true,
+  dali_motion_timeout_sec integer,
+  dali_dh_setpoint_als integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (property_id)
+);
+CREATE INDEX IF NOT EXISTS idx_at_facility_settings_account_id ON public.at_facility_settings(account_id);
+
 -- ============================================================================
 -- PART 2: ENABLE RLS ON ALL TABLES
 -- ============================================================================
@@ -254,6 +537,9 @@ ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.account_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dc_metadata ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sitdeck_risk_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_diagnosis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.physical_risk_flags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.systems ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meters ENABLE ROW LEVEL SECURITY;
@@ -264,6 +550,17 @@ ALTER TABLE public.evidence_attachments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agent_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agent_findings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_floors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_zones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_asset_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_asset_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_gateways ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_position_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_device_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_dali_commands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.at_facility_settings ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
 -- PART 3: CREATE POLICIES (account_memberships now exists)
@@ -284,6 +581,18 @@ DROP POLICY IF EXISTS "Members can read dc_metadata in their accounts" ON public
 DROP POLICY IF EXISTS "Members can insert dc_metadata in their accounts" ON public.dc_metadata;
 DROP POLICY IF EXISTS "Members can update dc_metadata in their accounts" ON public.dc_metadata;
 DROP POLICY IF EXISTS "Members can delete dc_metadata in their accounts" ON public.dc_metadata;
+DROP POLICY IF EXISTS "Members can read sitdeck_risk_config in their accounts" ON public.sitdeck_risk_config;
+DROP POLICY IF EXISTS "Members can insert sitdeck_risk_config in their accounts" ON public.sitdeck_risk_config;
+DROP POLICY IF EXISTS "Members can update sitdeck_risk_config in their accounts" ON public.sitdeck_risk_config;
+DROP POLICY IF EXISTS "Members can delete sitdeck_risk_config in their accounts" ON public.sitdeck_risk_config;
+DROP POLICY IF EXISTS "Members can read risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can insert risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can update risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can delete risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can read physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
+DROP POLICY IF EXISTS "Members can insert physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
+DROP POLICY IF EXISTS "Members can update physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
+DROP POLICY IF EXISTS "Members can delete physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
 DROP POLICY IF EXISTS "Members can manage spaces in their account properties" ON public.spaces;
 DROP POLICY IF EXISTS "Members can read systems in their accounts" ON public.systems;
 DROP POLICY IF EXISTS "Members can insert systems in their accounts" ON public.systems;
@@ -298,9 +607,24 @@ DROP POLICY IF EXISTS "Members can read agent_runs in their accounts" ON public.
 DROP POLICY IF EXISTS "Members can insert agent_runs in their accounts" ON public.agent_runs;
 DROP POLICY IF EXISTS "Members can update agent_runs in their accounts" ON public.agent_runs;
 DROP POLICY IF EXISTS "Members can read agent_findings for runs in their accounts" ON public.agent_findings;
+DROP POLICY IF EXISTS "Members can read agent_findings in their accounts" ON public.agent_findings;
 DROP POLICY IF EXISTS "Members can insert agent_findings for runs in their accounts" ON public.agent_findings;
 DROP POLICY IF EXISTS "Members can read audit_events in their accounts" ON public.audit_events;
 DROP POLICY IF EXISTS "Members can insert audit_events" ON public.audit_events;
+DROP POLICY IF EXISTS "Members can manage at_floors in their accounts" ON public.at_floors;
+DROP POLICY IF EXISTS "Members can manage at_zones in their accounts" ON public.at_zones;
+DROP POLICY IF EXISTS "Members can manage at_asset_types in their accounts" ON public.at_asset_types;
+DROP POLICY IF EXISTS "Members can manage at_assets in their accounts" ON public.at_assets;
+DROP POLICY IF EXISTS "Members can manage at_asset_tags in their accounts" ON public.at_asset_tags;
+DROP POLICY IF EXISTS "Members can manage at_gateways in their accounts" ON public.at_gateways;
+DROP POLICY IF EXISTS "Members can read at_position_events in their accounts" ON public.at_position_events;
+DROP POLICY IF EXISTS "Members can insert at_position_events in their accounts" ON public.at_position_events;
+DROP POLICY IF EXISTS "Members can read at_alerts in their accounts" ON public.at_alerts;
+DROP POLICY IF EXISTS "Members can insert at_alerts in their accounts" ON public.at_alerts;
+DROP POLICY IF EXISTS "Members can update at_alerts in their accounts" ON public.at_alerts;
+DROP POLICY IF EXISTS "Members can manage at_device_state in their accounts" ON public.at_device_state;
+DROP POLICY IF EXISTS "Members can manage at_dali_commands in their accounts" ON public.at_dali_commands;
+DROP POLICY IF EXISTS "Members can manage at_facility_settings in their accounts" ON public.at_facility_settings;
 
 -- profiles
 CREATE POLICY "Users can read own profile"
@@ -353,6 +677,68 @@ CREATE POLICY "Members can update dc_metadata in their accounts"
 CREATE POLICY "Members can delete dc_metadata in their accounts"
   ON public.dc_metadata FOR DELETE
   USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- sitdeck_risk_config
+CREATE POLICY "Members can read sitdeck_risk_config in their accounts"
+  ON public.sitdeck_risk_config FOR SELECT
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can insert sitdeck_risk_config in their accounts"
+  ON public.sitdeck_risk_config FOR INSERT
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can update sitdeck_risk_config in their accounts"
+  ON public.sitdeck_risk_config FOR UPDATE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can delete sitdeck_risk_config in their accounts"
+  ON public.sitdeck_risk_config FOR DELETE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- risk_diagnosis
+CREATE POLICY "Members can read risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR SELECT
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can insert risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR INSERT
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can update risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR UPDATE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can delete risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR DELETE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- physical_risk_flags (via risk_diagnosis.account_id)
+CREATE POLICY "Members can read physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR SELECT
+  USING (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
+CREATE POLICY "Members can insert physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR INSERT
+  WITH CHECK (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
+CREATE POLICY "Members can update physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR UPDATE
+  USING (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
+CREATE POLICY "Members can delete physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR DELETE
+  USING (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
 
 -- spaces
 CREATE POLICY "Members can manage spaces in their account properties"
@@ -420,22 +806,22 @@ CREATE POLICY "Members can update agent_runs in their accounts"
   ON public.agent_runs FOR UPDATE
   USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
 
--- agent_findings
-CREATE POLICY "Members can read agent_findings for runs in their accounts"
+-- agent_findings (account_id scope; SitDeck webhook inserts use service role)
+CREATE POLICY "Members can read agent_findings in their accounts"
   ON public.agent_findings FOR SELECT
   USING (
-    agent_run_id IN (
-      SELECT id FROM public.agent_runs
-      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
-    )
+    account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
   );
 CREATE POLICY "Members can insert agent_findings for runs in their accounts"
   ON public.agent_findings FOR INSERT
   WITH CHECK (
-    agent_run_id IN (
-      SELECT id FROM public.agent_runs
-      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    agent_run_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM public.agent_runs AS r
+      WHERE r.id = agent_run_id
+        AND r.account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
     )
+    AND account_id = (SELECT r2.account_id FROM public.agent_runs AS r2 WHERE r2.id = agent_run_id)
   );
 
 -- audit_events
@@ -445,6 +831,139 @@ CREATE POLICY "Members can read audit_events in their accounts"
 CREATE POLICY "Members can insert audit_events"
   ON public.audit_events FOR INSERT
   WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- Asset Tracking — account-scoped policies (same membership pattern)
+CREATE POLICY "Members can manage at_floors in their accounts"
+  ON public.at_floors FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_zones in their accounts"
+  ON public.at_zones FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_asset_types in their accounts"
+  ON public.at_asset_types FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_assets in their accounts"
+  ON public.at_assets FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_asset_tags in their accounts"
+  ON public.at_asset_tags FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_gateways in their accounts"
+  ON public.at_gateways FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can read at_position_events in their accounts"
+  ON public.at_position_events FOR SELECT
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can insert at_position_events in their accounts"
+  ON public.at_position_events FOR INSERT
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can read at_alerts in their accounts"
+  ON public.at_alerts FOR SELECT
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can insert at_alerts in their accounts"
+  ON public.at_alerts FOR INSERT
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can update at_alerts in their accounts"
+  ON public.at_alerts FOR UPDATE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_device_state in their accounts"
+  ON public.at_device_state FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_dali_commands in their accounts"
+  ON public.at_dali_commands FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+CREATE POLICY "Members can manage at_facility_settings in their accounts"
+  ON public.at_facility_settings FOR ALL
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- agent_findings: set account_id from agent_run when clients omit it
+CREATE OR REPLACE FUNCTION public.agent_findings_set_account_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.agent_run_id IS NOT NULL THEN
+    SELECT r.account_id INTO NEW.account_id
+    FROM public.agent_runs AS r
+    WHERE r.id = NEW.agent_run_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS agent_findings_set_account_id_trigger ON public.agent_findings;
+CREATE TRIGGER agent_findings_set_account_id_trigger
+  BEFORE INSERT OR UPDATE OF agent_run_id ON public.agent_findings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.agent_findings_set_account_id();
+
+CREATE OR REPLACE FUNCTION public.at_alerts_audit_to_audit_events()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    INSERT INTO public.audit_events (account_id, entity_type, entity_id, action, actor_id, before_state, after_state)
+    VALUES (NEW.account_id, 'at_alerts', NEW.id, 'create', auth.uid(), NULL, to_jsonb(NEW));
+    RETURN NEW;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.status IS DISTINCT FROM NEW.status
+       OR OLD.acknowledged_by IS DISTINCT FROM NEW.acknowledged_by
+       OR OLD.acknowledged_at IS DISTINCT FROM NEW.acknowledged_at
+    THEN
+      INSERT INTO public.audit_events (account_id, entity_type, entity_id, action, actor_id, before_state, after_state)
+      VALUES (
+        NEW.account_id,
+        'at_alerts',
+        NEW.id,
+        'update',
+        auth.uid(),
+        jsonb_build_object(
+          'status', OLD.status,
+          'acknowledged_by', OLD.acknowledged_by,
+          'acknowledged_at', OLD.acknowledged_at
+        ),
+        jsonb_build_object(
+          'status', NEW.status,
+          'acknowledged_by', NEW.acknowledged_by,
+          'acknowledged_at', NEW.acknowledged_at
+        )
+      );
+    END IF;
+    RETURN NEW;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS at_alerts_audit_trigger ON public.at_alerts;
+CREATE TRIGGER at_alerts_audit_trigger
+  AFTER INSERT OR UPDATE ON public.at_alerts
+  FOR EACH ROW
+  EXECUTE FUNCTION public.at_alerts_audit_to_audit_events();
 
 -- ============================================================================
 -- PART 4: Trigger — create profile on signup

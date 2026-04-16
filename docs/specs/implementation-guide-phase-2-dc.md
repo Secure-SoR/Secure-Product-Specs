@@ -72,11 +72,11 @@ This guide explains **what each step means** and **how to do it** in plain langu
 
 **How to do it:**
 
-- **Where:** Backend or app — wherever you build the "context" payload for agents or reporting. Extend that logic so that when the property is a data centre, you also include: dc_metadata row(s), space list (with space_type for DC), and systems. Document that DC properties get this extended context.
+- **Where:** Backend or app — wherever you build the "context" payload for agents or reporting. Extend that logic so that when the property is a data centre, you also include: dc_metadata row(s), space list (with space_type for DC), and systems. **Documented in:** [agent-context-data-centre.md](../architecture/agent-context-data-centre.md).
 - **If you use Cursor:**  
-  *"Extend the Data Readiness / Boundary context (used for agents and reporting) to include dc_metadata, spaces, and systems when the property is a data centre."*
+  *"Extend the Data Readiness / Boundary context (used for agents and reporting) to include dc_metadata, spaces, and systems when the property is a data_centre property. Follow docs/architecture/agent-context-data-centre.md."*
 
-**Done when:** Context for a data centre property includes DC metadata, spaces, and systems.
+**Done when:** Context for a data centre property includes DC metadata, spaces, and systems (see checklist in [agent-context-data-centre.md](../architecture/agent-context-data-centre.md)).
 
 ---
 

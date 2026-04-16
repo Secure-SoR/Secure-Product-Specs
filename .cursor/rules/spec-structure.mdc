@@ -1,0 +1,24 @@
+---
+description: Feature-level backend specs must include the 10 standard sections
+globs: docs/specs/**/*.md
+alwaysApply: false
+---
+
+# Spec file structure (docs/specs/)
+
+When creating or editing **feature-level** backend spec files in `docs/specs/`, the document must include all **10 sections** defined in [docs/specs/SPEC-TEMPLATE.md](docs/specs/SPEC-TEMPLATE.md):
+
+1. Feature Overview  
+2. Functional Requirements  
+3. API Endpoints / Data Surface  
+4. Database Schema  
+5. Business Logic & Validation Rules  
+6. Authentication & Authorization  
+7. State & Workflow  
+8. Error Handling  
+9. External Integrations & Events  
+10. Non-Functional Requirements  
+
+- Use **N/A** or **See §X** where a section does not apply.  
+- Keep existing content; reorganise under these section headers where possible.  
+- Implementation guides (e.g. `implementation-guide-phase-*.md`) may follow a different structure; the template applies to feature specs such as `*-specifications.md` and `secure-dc-spec-v2.md`.

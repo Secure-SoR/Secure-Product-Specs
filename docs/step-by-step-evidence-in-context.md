@@ -34,7 +34,7 @@ Full detail and SQL for Part 1 also lives in the AI Agents repo: `agent/docs/CHE
 - When building context, query **data_library_records** filtered by the selected property:
   - Supabase: `supabase.from('data_library_records').select('*').eq('property_id', selectedPropertyId)`
   - Or equivalent: only rows where `property_id = selectedPropertyId`.
-- Put the result in the context object as **dataLibraryRecords**. Each item must include at least: `id`, `subject_category` (or map to `category`), and any other fields the agent expects (see Phase 5 context shape in `implementation-plan-lovable-supabase-agent.md` and `handover-files-for-agent/CONTEXT-SOURCE.md`).
+- Put the result in the context object as **dataLibraryRecords**. Each item must include at least: `id`, `subject_category` (or map to `category`), and any other fields the agent expects (see Phase 5 context shape in `implementation-plan-lovable-supabase-agent.md` and `for-agent/CONTEXT-SOURCE.md`).
 
 ### Step 2.3 — Fetch evidence for those records
 
@@ -76,7 +76,7 @@ Full detail and SQL for Part 1 also lives in the AI Agents repo: `agent/docs/CHE
 | **DB**   | Ensure waste records exist and are linked to documents via `evidence_attachments` (and `documents`). |
 | **Lovable** | For the selected property: (1) fetch its data_library_records, (2) fetch evidence_attachments + documents for those records, (3) build an `evidence` array with `recordId` = data_library_record id, (4) send it in the agent request. |
 
-Schema reference: `docs/database/schema.md` (§ data_library_records, evidence_attachments, documents). Context shape: `handover-files-for-agent/CONTEXT-SOURCE.md` and Phase 5 in `implementation-plan-lovable-supabase-agent.md`.
+Schema reference: `docs/database/schema.md` (§ data_library_records, evidence_attachments, documents). Context shape: `for-agent/CONTEXT-SOURCE.md` and Phase 5 in `implementation-plan-lovable-supabase-agent.md`.
 
 ---
 
