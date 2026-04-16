@@ -1,6 +1,6 @@
 # Lovable prompt — Risk Diagnosis UI (Data Centre property)
 
-**Use when:** [implementation-guide-phase-4-dc.md](../specs/implementation-guide-phase-4-dc.md) Step 4.2 — show **`risk_diagnosis`** and **`physical_risk_flags`** for a property; clearly label flags from SitDeck (`source = 'sitdeck'`).
+**Use when:** [implementation-guide-phase-4-dc.md](../specs/implementation-guide-phase-4-dc.md) Step 4.2 — show `**risk_diagnosis`** and `**physical_risk_flags`** for a property; clearly label flags from SitDeck (`source = 'sitdeck'`).
 
 **Prerequisites:** Migration [add-risk-diagnosis.sql](../database/migrations/add-risk-diagnosis.sql) applied. Schema: [schema.md](../database/schema.md) §3.4c–3.4d.
 
@@ -52,7 +52,7 @@ When `risk_diagnosis` exists, show a **summary card** with:
 - **Summary** (text) if `summary` is set
 - **Overall risk level** as a clear badge/chip (map `unknown` / `low` / `moderate` / `high` / `critical` to accessible colours; handle null)
 - **Assessed at** (`assessed_at`) and **SitDeck last synced** (`sitdeck_last_synced_at`) when present — human-readable dates
-- **`diagnosis_json`**: if non-null, show in a collapsible “Structured details” section as pretty-printed JSON (read-only) or omit if empty
+- `**diagnosis_json`**: if non-null, show in a collapsible “Structured details” section as pretty-printed JSON (read-only) or omit if empty
 
 ## UI — physical risk flags
 
@@ -88,3 +88,4 @@ Do not merge or hide `source`; users must see which flags come from SitDeck vs m
 
 - Run [add-risk-diagnosis.sql](../database/migrations/add-risk-diagnosis.sql) if not already applied.
 - Seed or sync a test row + flags (e.g. `source = 'sitdeck'`) to verify badges and RLS.
+
