@@ -100,6 +100,47 @@ CREATE TABLE IF NOT EXISTS public.sitdeck_risk_config (
 CREATE INDEX IF NOT EXISTS idx_sitdeck_risk_config_account_id ON public.sitdeck_risk_config(account_id);
 CREATE INDEX IF NOT EXISTS idx_sitdeck_risk_config_property_id ON public.sitdeck_risk_config(property_id);
 
+CREATE TABLE IF NOT EXISTS public.risk_diagnosis (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  summary text,
+  overall_risk_level text CHECK (
+    overall_risk_level IS NULL
+    OR overall_risk_level IN ('unknown', 'low', 'moderate', 'high', 'critical')
+  ),
+  diagnosis_json jsonb,
+  assessed_at timestamptz,
+  sitdeck_last_synced_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (property_id)
+);
+CREATE INDEX IF NOT EXISTS idx_risk_diagnosis_account_id ON public.risk_diagnosis(account_id);
+CREATE INDEX IF NOT EXISTS idx_risk_diagnosis_property_id ON public.risk_diagnosis(property_id);
+
+CREATE TABLE IF NOT EXISTS public.physical_risk_flags (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  risk_diagnosis_id uuid NOT NULL REFERENCES public.risk_diagnosis(id) ON DELETE CASCADE,
+  flag_type text NOT NULL,
+  source text NOT NULL CHECK (source IN ('sitdeck', 'manual', 'agent')),
+  severity text CHECK (
+    severity IS NULL
+    OR severity IN ('unknown', 'low', 'moderate', 'high', 'critical')
+  ),
+  title text,
+  detail text,
+  payload jsonb,
+  external_ref text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_physical_risk_flags_diagnosis_id ON public.physical_risk_flags(risk_diagnosis_id);
+CREATE INDEX IF NOT EXISTS idx_physical_risk_flags_source ON public.physical_risk_flags(risk_diagnosis_id, source);
+
+COMMENT ON TABLE public.risk_diagnosis IS 'Per-property risk assessment snapshot; DC Risk Diagnosis UI';
+COMMENT ON TABLE public.physical_risk_flags IS 'Physical risk flags; source = sitdeck | manual | agent';
+
 CREATE TABLE IF NOT EXISTS public.spaces (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   property_id uuid NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
@@ -237,12 +278,29 @@ CREATE INDEX IF NOT EXISTS idx_agent_runs_account_id ON public.agent_runs(accoun
 
 CREATE TABLE IF NOT EXISTS public.agent_findings (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_run_id uuid NOT NULL REFERENCES public.agent_runs(id) ON DELETE CASCADE,
+  agent_run_id uuid REFERENCES public.agent_runs(id) ON DELETE CASCADE,
+  account_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+  property_id uuid REFERENCES public.properties(id) ON DELETE SET NULL,
+  source text,
   finding_type text,
   payload jsonb NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT agent_findings_source_run_check CHECK (
+    (agent_run_id IS NOT NULL AND (source IS NULL OR source <> 'sitdeck'))
+    OR
+    (agent_run_id IS NULL AND source = 'sitdeck' AND account_id IS NOT NULL)
+  )
 );
 CREATE INDEX IF NOT EXISTS idx_agent_findings_agent_run_id ON public.agent_findings(agent_run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_findings_account_id ON public.agent_findings(account_id);
+CREATE INDEX IF NOT EXISTS idx_agent_findings_property_id ON public.agent_findings(property_id)
+  WHERE property_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_agent_findings_account_sitdeck ON public.agent_findings(account_id, created_at DESC)
+  WHERE source = 'sitdeck';
+
+COMMENT ON COLUMN public.agent_findings.account_id IS 'Tenant scope; set from agent_runs or for webhook-sourced findings';
+COMMENT ON COLUMN public.agent_findings.source IS 'sitdeck for SitDeck webhook alerts; NULL when tied to an agent run';
+COMMENT ON COLUMN public.agent_findings.property_id IS 'Optional property scope (e.g. SitDeck alert for a specific property)';
 
 CREATE TABLE IF NOT EXISTS public.audit_events (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -480,6 +538,8 @@ ALTER TABLE public.account_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dc_metadata ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sitdeck_risk_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_diagnosis ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.physical_risk_flags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.systems ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meters ENABLE ROW LEVEL SECURITY;
@@ -525,6 +585,14 @@ DROP POLICY IF EXISTS "Members can read sitdeck_risk_config in their accounts" O
 DROP POLICY IF EXISTS "Members can insert sitdeck_risk_config in their accounts" ON public.sitdeck_risk_config;
 DROP POLICY IF EXISTS "Members can update sitdeck_risk_config in their accounts" ON public.sitdeck_risk_config;
 DROP POLICY IF EXISTS "Members can delete sitdeck_risk_config in their accounts" ON public.sitdeck_risk_config;
+DROP POLICY IF EXISTS "Members can read risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can insert risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can update risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can delete risk_diagnosis in their accounts" ON public.risk_diagnosis;
+DROP POLICY IF EXISTS "Members can read physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
+DROP POLICY IF EXISTS "Members can insert physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
+DROP POLICY IF EXISTS "Members can update physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
+DROP POLICY IF EXISTS "Members can delete physical_risk_flags for their diagnoses" ON public.physical_risk_flags;
 DROP POLICY IF EXISTS "Members can manage spaces in their account properties" ON public.spaces;
 DROP POLICY IF EXISTS "Members can read systems in their accounts" ON public.systems;
 DROP POLICY IF EXISTS "Members can insert systems in their accounts" ON public.systems;
@@ -539,6 +607,7 @@ DROP POLICY IF EXISTS "Members can read agent_runs in their accounts" ON public.
 DROP POLICY IF EXISTS "Members can insert agent_runs in their accounts" ON public.agent_runs;
 DROP POLICY IF EXISTS "Members can update agent_runs in their accounts" ON public.agent_runs;
 DROP POLICY IF EXISTS "Members can read agent_findings for runs in their accounts" ON public.agent_findings;
+DROP POLICY IF EXISTS "Members can read agent_findings in their accounts" ON public.agent_findings;
 DROP POLICY IF EXISTS "Members can insert agent_findings for runs in their accounts" ON public.agent_findings;
 DROP POLICY IF EXISTS "Members can read audit_events in their accounts" ON public.audit_events;
 DROP POLICY IF EXISTS "Members can insert audit_events" ON public.audit_events;
@@ -623,6 +692,54 @@ CREATE POLICY "Members can delete sitdeck_risk_config in their accounts"
   ON public.sitdeck_risk_config FOR DELETE
   USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
 
+-- risk_diagnosis
+CREATE POLICY "Members can read risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR SELECT
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can insert risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR INSERT
+  WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can update risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR UPDATE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+CREATE POLICY "Members can delete risk_diagnosis in their accounts"
+  ON public.risk_diagnosis FOR DELETE
+  USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- physical_risk_flags (via risk_diagnosis.account_id)
+CREATE POLICY "Members can read physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR SELECT
+  USING (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
+CREATE POLICY "Members can insert physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR INSERT
+  WITH CHECK (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
+CREATE POLICY "Members can update physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR UPDATE
+  USING (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
+CREATE POLICY "Members can delete physical_risk_flags for their diagnoses"
+  ON public.physical_risk_flags FOR DELETE
+  USING (
+    risk_diagnosis_id IN (
+      SELECT id FROM public.risk_diagnosis
+      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    )
+  );
+
 -- spaces
 CREATE POLICY "Members can manage spaces in their account properties"
   ON public.spaces FOR ALL
@@ -689,22 +806,22 @@ CREATE POLICY "Members can update agent_runs in their accounts"
   ON public.agent_runs FOR UPDATE
   USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
 
--- agent_findings
-CREATE POLICY "Members can read agent_findings for runs in their accounts"
+-- agent_findings (account_id scope; SitDeck webhook inserts use service role)
+CREATE POLICY "Members can read agent_findings in their accounts"
   ON public.agent_findings FOR SELECT
   USING (
-    agent_run_id IN (
-      SELECT id FROM public.agent_runs
-      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
-    )
+    account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
   );
 CREATE POLICY "Members can insert agent_findings for runs in their accounts"
   ON public.agent_findings FOR INSERT
   WITH CHECK (
-    agent_run_id IN (
-      SELECT id FROM public.agent_runs
-      WHERE account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
+    agent_run_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM public.agent_runs AS r
+      WHERE r.id = agent_run_id
+        AND r.account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid())
     )
+    AND account_id = (SELECT r2.account_id FROM public.agent_runs AS r2 WHERE r2.id = agent_run_id)
   );
 
 -- audit_events
@@ -777,6 +894,29 @@ CREATE POLICY "Members can manage at_facility_settings in their accounts"
   ON public.at_facility_settings FOR ALL
   USING (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()))
   WITH CHECK (account_id IN (SELECT account_id FROM public.account_memberships WHERE user_id = auth.uid()));
+
+-- agent_findings: set account_id from agent_run when clients omit it
+CREATE OR REPLACE FUNCTION public.agent_findings_set_account_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.agent_run_id IS NOT NULL THEN
+    SELECT r.account_id INTO NEW.account_id
+    FROM public.agent_runs AS r
+    WHERE r.id = NEW.agent_run_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS agent_findings_set_account_id_trigger ON public.agent_findings;
+CREATE TRIGGER agent_findings_set_account_id_trigger
+  BEFORE INSERT OR UPDATE OF agent_run_id ON public.agent_findings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.agent_findings_set_account_id();
 
 CREATE OR REPLACE FUNCTION public.at_alerts_audit_to_audit_events()
 RETURNS trigger

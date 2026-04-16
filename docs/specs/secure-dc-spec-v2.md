@@ -337,7 +337,7 @@ Use this order within each phase. Backend (migrations, schema) first, then UI.
 | 3.3 | Integrations & Evidence (or property settings): surface property latitude/longitude; allow edit so widgets can use coordinates. | Clarification Q3 | Backed by properties.lat/lng added in Phase 1. |
 | 3.4 | Property view (data_centre): embed SitDeck OSINT widgets — geopolitical, climate, cyber dashboards; anchor to property lat/lng. | §6 | iframe or JS SDK per SitDeck docs; show relation to asset location. |
 | 3.5 | Property view / Risk: embed physical risk map widget (flood, wildfire, etc.); feed into Risk Diagnosis when that exists (Phase 4). | §10 | sitdeck_risk_config drives which widgets are active. |
-| 3.6 | Optional: webhook receiver for SitDeck alerts → write to agent_findings (finding_type, source 'sitdeck'); extend agent_findings schema if needed (e.g. source, nullable agent_run_id). | §6, Clarification Q5 | For audit trail of threshold alerts. |
+| 3.6 | Optional: webhook receiver for SitDeck alerts → write to agent_findings (finding_type, source 'sitdeck'); extend agent_findings schema if needed (e.g. source, nullable agent_run_id, account_id). | §6, Clarification Q5 | Migration [add-agent-findings-sitdeck-webhook.sql](../database/migrations/add-agent-findings-sitdeck-webhook.sql); guide Step 3.6. |
 | 3.7 | Live PUE tile on main property page: source PUE from data_library_records (not SitDeck DCIM). | §8 | Display only; data from manual/file input. |
 
 **Phase 3 done when:** User can connect SitDeck in **Data Library → Connectors**; DC property view shows OSINT and physical risk widgets; lat/lng editable; optional webhook → agent_findings.
@@ -348,8 +348,8 @@ Use this order within each phase. Backend (migrations, schema) first, then UI.
 
 | Step | Task | Spec ref | Notes |
 |------|------|----------|--------|
-| 4.1 | Define and add Risk Diagnosis schema (e.g. risk_diagnosis or equivalent table) and physical_risk_flags (e.g. flags with source = 'sitdeck'). | §6, §10, Clarification Q4 | Backend migration; RLS. |
-| 4.2 | Risk Diagnosis UI: show risk record for property; consume physical_risk_flags from SitDeck (Phase 3 widgets / config). | §6, §10 | So SitDeck risk feeds into a dedicated risk view. |
+| 4.1 | Define and add Risk Diagnosis schema (e.g. risk_diagnosis or equivalent table) and physical_risk_flags (e.g. flags with source = 'sitdeck'). | §6, §10, Clarification Q4 | Migration [add-risk-diagnosis.sql](../database/migrations/add-risk-diagnosis.sql); RLS by account. |
+| 4.2 | Risk Diagnosis UI: show risk record for property; consume physical_risk_flags from SitDeck (Phase 3 widgets / config). | §6, §10 | Lovable: [LOVABLE-PROMPT-RISK-DIAGNOSIS-DC.md](./LOVABLE-PROMPT-RISK-DIAGNOSIS-DC.md). |
 | 4.3 | Extend Data Readiness and Boundary context: include DC-specific fields (dc_metadata, space template, systems) for agent and reporting. | §7 | Full DC context in agent payload. |
 | 4.4 | PUE & Efficiency Advisor agent: define input (property, dc_metadata, data_library_records, spaces, systems) and structured output (e.g. PUE insight, recommendations). | §7 | Agent logic in AI agents repo; schema/DB in backend. |
 | 4.5 | Wire agent from DC dashboard: "Run PUE Advisor" (or similar); call agent with context; display result; optionally persist to agent_runs and agent_findings. | §7, §8 | Same pattern as existing agent integration. |
